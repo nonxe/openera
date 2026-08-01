@@ -17,7 +17,7 @@ export class PlayerController {
     this.crouchEyeHeight = 0.9;
     this.currentEyeHeight = 1.6;
 
-    this.playerRadius = 0.6;
+    this.playerRadius = 0.5;
     this.playerHeight = 1.8;
 
     this.velocity = new THREE.Vector3();
@@ -121,12 +121,12 @@ export class PlayerController {
     this.camera.position.set(x, y + this.currentEyeHeight, z);
   }
 
-  // Robust AABB Horizontal Wall Collision Resolution
+  // Safe AABB Horizontal Wall Collision Resolution
   resolveWallCollisions() {
     const pRadius = this.playerRadius;
     const pHeight = (this.isCrouching || this.isSliding) ? 1.0 : this.playerHeight;
 
-    // Create player AABB
+    // Set current player bounding box
     this.playerBox.min.set(
       this.position.x - pRadius,
       this.position.y + 0.1,
@@ -140,20 +140,16 @@ export class PlayerController {
 
     for (let i = 0; i < this.colliders.length; i++) {
       const colMesh = this.colliders[i];
-      if (!colMesh.geometry) continue;
+      if (!colMesh || !colMesh.isMesh) continue;
 
-      // Compute bounding box for collider
-      if (!colMesh.geometry.boundingBox) {
-        colMesh.geometry.computeBoundingBox();
-      }
+      // Update world matrix first to guarantee valid matrix World
+      colMesh.updateMatrixWorld(true);
+      this.tempBox.setFromObject(colMesh);
 
-      this.tempBox.copy(colMesh.geometry.boundingBox).applyMatrix4(colMesh.matrixWorld);
-
-      // Skip ground floor slab from horizontal wall push
+      // Skip main ground floor slab
       if (this.tempBox.max.y <= this.position.y + 0.2) continue;
 
       if (this.playerBox.intersectsBox(this.tempBox)) {
-        // Calculate penetration depth along X and Z axes
         const overlapX1 = this.tempBox.max.x - this.playerBox.min.x;
         const overlapX2 = this.playerBox.max.x - this.tempBox.min.x;
         const overlapZ1 = this.tempBox.max.z - this.playerBox.min.z;
@@ -162,14 +158,16 @@ export class PlayerController {
         const overlapX = Math.min(overlapX1, overlapX2);
         const overlapZ = Math.min(overlapZ1, overlapZ2);
 
-        // Step-up check (allows stepping over low obstacles like curbs/stairs)
+        if (isNaN(overlapX) || isNaN(overlapZ)) continue;
+
+        // Step-up check (allows stepping onto low curbs <= 0.5m)
         const stepHeight = this.tempBox.max.y - this.position.y;
-        if (stepHeight > 0 && stepHeight <= 0.6 && this.isGrounded) {
+        if (stepHeight > 0 && stepHeight <= 0.5 && this.isGrounded) {
           this.position.y = this.tempBox.max.y;
           continue;
         }
 
-        // Push out along minimum overlap axis
+        // Push player out along minimum penetration axis
         if (overlapX < overlapZ) {
           if (overlapX1 < overlapX2) {
             this.position.x += overlapX;
@@ -186,7 +184,7 @@ export class PlayerController {
           this.velocity.z = 0;
         }
 
-        // Recalculate player box after push out
+        // Update player box after push
         this.playerBox.min.set(
           this.position.x - pRadius,
           this.position.y + 0.1,
@@ -249,17 +247,17 @@ export class PlayerController {
     // Gravity
     this.velocity.y -= this.gravity * delta;
 
-    // 1. Move Position horizontally
+    // Horizontal Movement & Wall Collision
     this.position.x += this.velocity.x * delta;
     this.position.z += this.velocity.z * delta;
 
-    // 2. Resolve Horizontal Wall Collisions (STOPS PLAYERS FROM WALKING THROUGH BUILDINGS/CRATES!)
+    // Resolve Wall Collisions safely
     this.resolveWallCollisions();
 
-    // 3. Move Position vertically
+    // Vertical Movement
     this.position.y += this.velocity.y * delta;
 
-    // 4. Raycast Ground Collision (Cast down 1.2m from feet + 0.5m)
+    // Raycast Ground Check
     const rayOrigin = new THREE.Vector3(this.position.x, this.position.y + 0.5, this.position.z);
     const raycaster = new THREE.Raycaster(rayOrigin, new THREE.Vector3(0, -1, 0), 0, 1.2);
     const intersects = raycaster.intersectObjects(this.colliders, false);
@@ -293,12 +291,17 @@ export class PlayerController {
       }
     });
 
-    // Map Outer Boundary Clamping
+    // Outer Boundary Limit
     const limit = 150;
     this.position.x = THREE.MathUtils.clamp(this.position.x, -limit, limit);
     this.position.z = THREE.MathUtils.clamp(this.position.z, -limit, limit);
 
-    // Sync camera position
+    // Safeguard NaN
+    if (isNaN(this.position.x)) this.position.x = 0;
+    if (isNaN(this.position.y)) this.position.y = 1;
+    if (isNaN(this.position.z)) this.position.z = 0;
+
+    // Sync Camera
     this.camera.position.set(this.position.x, this.position.y + this.currentEyeHeight, this.position.z);
   }
 }
