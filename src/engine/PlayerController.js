@@ -8,14 +8,17 @@ export class PlayerController {
     this.colliders = colliders;
     this.jumpPads = jumpPads;
 
-    // Set correct Euler order for FPS camera ('YXZ' prevents camera roll)
+    // YXZ Euler order prevents camera roll/tilting
     this.camera.rotation.order = 'YXZ';
 
-    // Position (Feet level) & Camera Eye Height Offset
+    // Position (Feet level) & Eye Height
     this.position = new THREE.Vector3(0, 1, 0);
     this.eyeHeight = 1.6;
     this.crouchEyeHeight = 0.9;
     this.currentEyeHeight = 1.6;
+
+    this.playerRadius = 0.6;
+    this.playerHeight = 1.8;
 
     this.velocity = new THREE.Vector3();
     this.rotation = { yaw: 0, pitch: 0 };
@@ -26,7 +29,7 @@ export class PlayerController {
     this.isSliding = false;
     this.slideTimer = 0;
 
-    // Movement speeds (deadshot.io tuned)
+    // Movement speeds
     this.walkSpeed = 11;
     this.sprintSpeed = 17;
     this.crouchSpeed = 5.5;
@@ -46,6 +49,9 @@ export class PlayerController {
     };
 
     this.footstepTimer = 0;
+    this.playerBox = new THREE.Box3();
+    this.tempBox = new THREE.Box3();
+
     this.initEventListeners();
   }
 
@@ -56,11 +62,9 @@ export class PlayerController {
       this.rotation.yaw -= e.movementX * this.sensitivity;
       this.rotation.pitch -= e.movementY * this.sensitivity;
 
-      // Clamp pitch (-89 to +89 degrees)
       const maxPitch = Math.PI / 2 - 0.02;
       this.rotation.pitch = Math.max(-maxPitch, Math.min(maxPitch, this.rotation.pitch));
 
-      // Apply to camera using YXZ Euler order
       this.camera.rotation.set(this.rotation.pitch, this.rotation.yaw, 0, 'YXZ');
     });
 
@@ -117,6 +121,86 @@ export class PlayerController {
     this.camera.position.set(x, y + this.currentEyeHeight, z);
   }
 
+  // Robust AABB Horizontal Wall Collision Resolution
+  resolveWallCollisions() {
+    const pRadius = this.playerRadius;
+    const pHeight = (this.isCrouching || this.isSliding) ? 1.0 : this.playerHeight;
+
+    // Create player AABB
+    this.playerBox.min.set(
+      this.position.x - pRadius,
+      this.position.y + 0.1,
+      this.position.z - pRadius
+    );
+    this.playerBox.max.set(
+      this.position.x + pRadius,
+      this.position.y + pHeight,
+      this.position.z + pRadius
+    );
+
+    for (let i = 0; i < this.colliders.length; i++) {
+      const colMesh = this.colliders[i];
+      if (!colMesh.geometry) continue;
+
+      // Compute bounding box for collider
+      if (!colMesh.geometry.boundingBox) {
+        colMesh.geometry.computeBoundingBox();
+      }
+
+      this.tempBox.copy(colMesh.geometry.boundingBox).applyMatrix4(colMesh.matrixWorld);
+
+      // Skip ground floor slab from horizontal wall push
+      if (this.tempBox.max.y <= this.position.y + 0.2) continue;
+
+      if (this.playerBox.intersectsBox(this.tempBox)) {
+        // Calculate penetration depth along X and Z axes
+        const overlapX1 = this.tempBox.max.x - this.playerBox.min.x;
+        const overlapX2 = this.playerBox.max.x - this.tempBox.min.x;
+        const overlapZ1 = this.tempBox.max.z - this.playerBox.min.z;
+        const overlapZ2 = this.playerBox.max.z - this.tempBox.min.z;
+
+        const overlapX = Math.min(overlapX1, overlapX2);
+        const overlapZ = Math.min(overlapZ1, overlapZ2);
+
+        // Step-up check (allows stepping over low obstacles like curbs/stairs)
+        const stepHeight = this.tempBox.max.y - this.position.y;
+        if (stepHeight > 0 && stepHeight <= 0.6 && this.isGrounded) {
+          this.position.y = this.tempBox.max.y;
+          continue;
+        }
+
+        // Push out along minimum overlap axis
+        if (overlapX < overlapZ) {
+          if (overlapX1 < overlapX2) {
+            this.position.x += overlapX;
+          } else {
+            this.position.x -= overlapX;
+          }
+          this.velocity.x = 0;
+        } else {
+          if (overlapZ1 < overlapZ2) {
+            this.position.z += overlapZ;
+          } else {
+            this.position.z -= overlapZ;
+          }
+          this.velocity.z = 0;
+        }
+
+        // Recalculate player box after push out
+        this.playerBox.min.set(
+          this.position.x - pRadius,
+          this.position.y + 0.1,
+          this.position.z - pRadius
+        );
+        this.playerBox.max.set(
+          this.position.x + pRadius,
+          this.position.y + pHeight,
+          this.position.z + pRadius
+        );
+      }
+    }
+  }
+
   update(delta) {
     // Smooth eye height crouching transition
     const targetEyeHeight = (this.isCrouching || this.isSliding) ? this.crouchEyeHeight : this.eyeHeight;
@@ -165,12 +249,17 @@ export class PlayerController {
     // Gravity
     this.velocity.y -= this.gravity * delta;
 
-    // Apply Velocity to Position
+    // 1. Move Position horizontally
     this.position.x += this.velocity.x * delta;
-    this.position.y += this.velocity.y * delta;
     this.position.z += this.velocity.z * delta;
 
-    // Raycast Ground Collision (Ray starts at feet + 0.5 and casts down 1.0m)
+    // 2. Resolve Horizontal Wall Collisions (STOPS PLAYERS FROM WALKING THROUGH BUILDINGS/CRATES!)
+    this.resolveWallCollisions();
+
+    // 3. Move Position vertically
+    this.position.y += this.velocity.y * delta;
+
+    // 4. Raycast Ground Collision (Cast down 1.2m from feet + 0.5m)
     const rayOrigin = new THREE.Vector3(this.position.x, this.position.y + 0.5, this.position.z);
     const raycaster = new THREE.Raycaster(rayOrigin, new THREE.Vector3(0, -1, 0), 0, 1.2);
     const intersects = raycaster.intersectObjects(this.colliders, false);
@@ -187,7 +276,6 @@ export class PlayerController {
         this.isGrounded = false;
       }
     } else if (this.position.y <= 0) {
-      // Fallback ground floor safeguard
       this.position.y = 0;
       this.velocity.y = 0;
       this.isGrounded = true;
@@ -205,12 +293,12 @@ export class PlayerController {
       }
     });
 
-    // Map Boundary Clamping
-    const limit = 75;
+    // Map Outer Boundary Clamping
+    const limit = 150;
     this.position.x = THREE.MathUtils.clamp(this.position.x, -limit, limit);
     this.position.z = THREE.MathUtils.clamp(this.position.z, -limit, limit);
 
-    // Sync camera to eye position (Feet + current eye height)
+    // Sync camera position
     this.camera.position.set(this.position.x, this.position.y + this.currentEyeHeight, this.position.z);
   }
 }
