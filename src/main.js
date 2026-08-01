@@ -4,7 +4,6 @@ import { GameScene } from './engine/Scene.js';
 import { WeaponManager } from './engine/Weapons.js';
 import { PlayerController } from './engine/PlayerController.js';
 import { ParticleFX } from './engine/Particles.js';
-import { BotManager } from './engine/BotAI.js';
 import { soundEngine } from './engine/Audio.js';
 
 class GameApp {
@@ -13,16 +12,19 @@ class GameApp {
     this.radarCanvas = document.getElementById('radar-canvas');
     this.radarCtx = this.radarCanvas.getContext('2d');
 
-    // Stats
-    this.username = 'Agent_Nova';
+    // Player Stats & State
+    this.username = 'Viper_X';
     this.selectedWeapon = 'assault';
+    this.gameMode = 'FFA'; // 'FFA' or 'TDM'
+    this.team = 'none';
     this.health = 100;
     this.kills = 0;
     this.deaths = 0;
     this.isPlaying = false;
     this.lastShotTime = 0;
+    this.isShopOpen = false;
 
-    // Remote Players Map
+    // Remote Players Map (Pure Online Humans)
     this.remotePlayers = new Map();
 
     this.initThreeJS();
@@ -36,7 +38,6 @@ class GameApp {
   }
 
   initThreeJS() {
-    // Renderer
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
       antialias: true,
@@ -47,19 +48,15 @@ class GameApp {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    // Camera
-    this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 300);
+    this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 400);
   }
 
   initGameModules() {
-    // Scene setup
     this.gameScene = new GameScene();
-
-    // Weapon Manager attached to camera
     this.gameScene.scene.add(this.camera);
+
     this.weapons = new WeaponManager(this.camera);
 
-    // Player Physics Controller
     this.player = new PlayerController(
       this.camera,
       this.canvas,
@@ -67,18 +64,11 @@ class GameApp {
       this.gameScene.jumpPads
     );
 
-    // Particle FX Engine
     this.particles = new ParticleFX(this.gameScene.scene);
-
-    // Bot AI Manager
-    this.bots = new BotManager(this.gameScene.scene, this.gameScene.colliders);
-
-    // Raycaster for shooting
     this.raycaster = new THREE.Raycaster();
   }
 
   initSocket() {
-    // Connect to Socket.io server
     const serverUrl = window.location.origin.includes('5173')
       ? 'http://localhost:3000'
       : window.location.origin;
@@ -86,12 +76,26 @@ class GameApp {
     this.socket = io(serverUrl, { autoConnect: true });
 
     this.socket.on('connect', () => {
-      console.log('[Socket] Connected to server:', this.socket.id);
-      document.getElementById('hud-ip-display').textContent = `ONLINE (${window.location.hostname})`;
+      console.log('[Socket] Connected as real player:', this.socket.id);
+      document.getElementById('hud-ip-display').textContent = `ONLINE REAL PLAYERS (${window.location.hostname})`;
     });
 
     this.socket.on('init_state', (data) => {
       this.selfId = data.selfId;
+      this.gameMode = data.mode;
+      
+      if (this.gameMode === 'TDM') {
+        document.getElementById('tdm-score-box').classList.remove('hidden');
+        this.updateTDMScore(data.teamScores);
+      }
+
+      data.players.forEach(p => {
+        if (p.id !== this.selfId) {
+          this.spawnRemotePlayer(p);
+        } else {
+          this.team = p.team;
+        }
+      });
     });
 
     this.socket.on('player_joined', (playerData) => {
@@ -109,14 +113,24 @@ class GameApp {
     this.socket.on('player_shot', (data) => {
       const origin = new THREE.Vector3().copy(data.origin);
       const dir = new THREE.Vector3().copy(data.direction);
-      const endPos = new THREE.Vector3().copy(origin).addScaledVector(dir, 50);
+      const endPos = new THREE.Vector3().copy(origin).addScaledVector(dir, 80);
 
       this.particles.createTracer(origin, endPos);
       soundEngine.playGunshot(data.weapon || 'assault');
     });
 
+    this.socket.on('damaged', (data) => {
+      this.health = data.health;
+      this.updateHealthUI();
+      soundEngine.playClick(soundEngine.ctx ? soundEngine.ctx.currentTime : 0, 120, 0.1);
+    });
+
     this.socket.on('player_killed', (data) => {
       this.addKillFeed(data.text);
+      if (data.teamScores && this.gameMode === 'TDM') {
+        this.updateTDMScore(data.teamScores);
+      }
+
       if (data.killerId === this.selfId) {
         this.kills++;
         document.getElementById('hud-kills').textContent = this.kills;
@@ -146,17 +160,27 @@ class GameApp {
   spawnRemotePlayer(data) {
     if (data.id === this.socket.id) return;
 
-    const armorMat = new THREE.MeshStandardMaterial({ color: data.color || 0x00f0ff, roughness: 0.3 });
-    const darkMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
+    const teamColor = data.team === 'alpha' ? 0x00f0ff : data.team === 'bravo' ? 0xff007f : 0x10b981;
+    const armorMat = new THREE.MeshStandardMaterial({ color: teamColor, roughness: 0.3, metalness: 0.7 });
+    const darkMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.5 });
+    const visorMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
 
     const group = new THREE.Group();
+
+    // Torso
     const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.4), armorMat);
     torso.position.y = 1.0;
     group.add(torso);
 
+    // Head
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), darkMat);
     head.position.y = 1.7;
     group.add(head);
+
+    // Visor
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.08, 0.1), visorMat);
+    visor.position.set(0, 1.72, -0.2);
+    group.add(visor);
 
     group.position.set(data.x, data.y, data.z);
     this.gameScene.scene.add(group);
@@ -168,21 +192,46 @@ class GameApp {
       position: group.position,
       targetPos: new THREE.Vector3(data.x, data.y, data.z),
       targetRotY: 0,
-      username: data.username
+      username: data.username,
+      team: data.team,
+      color: data.color
     });
   }
 
   initUI() {
-    // Weapon loadout buttons
+    // Mode selector
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.gameMode = btn.dataset.mode;
+      });
+    });
+
+    // Weapon selector in lobby
     document.querySelectorAll('.loadout-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', () => {
         document.querySelectorAll('.loadout-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.selectedWeapon = btn.dataset.weapon;
       });
     });
 
-    // Deploy to Arena button
+    // Mid-match Weapon Shop Modal items
+    document.querySelectorAll('.shop-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const weaponKey = item.dataset.weapon;
+        this.switchWeapon(weaponKey);
+        this.socket.emit('change_weapon', { weapon: weaponKey });
+        this.toggleWeaponShop(false);
+      });
+    });
+
+    document.getElementById('btn-open-shop').addEventListener('click', () => {
+      this.toggleWeaponShop(true);
+    });
+
+    // Deploy to match
     document.getElementById('btn-deploy').addEventListener('click', () => {
       const nameInput = document.getElementById('username-input').value.trim();
       if (nameInput) this.username = nameInput;
@@ -197,48 +246,36 @@ class GameApp {
       this.canvas.requestPointerLock();
       this.isPlaying = true;
 
-      // Notify socket
       this.socket.emit('join_game', {
         username: this.username,
-        weapon: this.selectedWeapon
+        weapon: this.selectedWeapon,
+        mode: this.gameMode
       });
-
-      // Spawn AI opponent bots if playing solo
-      if (this.bots.bots.size === 0) {
-        this.bots.spawnBot('bot_1', 'CyberBot Alpha', 15, 3, -15, '#ff0055');
-        this.bots.spawnBot('bot_2', 'Viper Bot', -15, 3, 20, '#f59e0b');
-        this.bots.spawnBot('bot_3', 'Spectre Bot', 25, 3, 25, '#10b981');
-        this.bots.spawnBot('bot_4', 'Phantom Bot', -25, 3, -25, '#8b5cf6');
-      }
     });
   }
 
   initEvents() {
-    // Resize Listener
     window.addEventListener('resize', () => {
       this.camera.aspect = window.innerWidth / window.innerHeight;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // Pointer Lock change
     document.addEventListener('pointerlockchange', () => {
-      if (document.pointerLockElement !== this.canvas) {
+      if (document.pointerLockElement !== this.canvas && !this.isShopOpen) {
         if (this.isPlaying) {
           document.getElementById('lobby-screen').classList.remove('hidden');
         }
       }
     });
 
-    // Mouse Controls (Shoot & Scope ADS)
+    // Mouse Shoot & Scope
     window.addEventListener('mousedown', (e) => {
-      if (!this.isPlaying || document.pointerLockElement !== this.canvas) return;
+      if (!this.isPlaying || document.pointerLockElement !== this.canvas || this.isShopOpen) return;
 
       if (e.button === 0) {
-        // Left Click: Shoot
         this.shoot();
       } else if (e.button === 2) {
-        // Right Click: ADS Scope
         this.weapons.isADS = true;
         if (this.weapons.currentWeaponKey === 'sniper') {
           document.getElementById('scope-overlay').classList.remove('hidden');
@@ -258,14 +295,18 @@ class GameApp {
     });
 
     window.addEventListener('mousemove', (e) => {
-      if (document.pointerLockElement === this.canvas) {
+      if (document.pointerLockElement === this.canvas && !this.isShopOpen) {
         this.weapons.updateMouseSway(e.movementX, e.movementY);
       }
     });
 
-    // Keyboard Shortcuts (1-3 for weapons, R for reload, Tab for Leaderboard)
+    // Keyboard Shortcuts (B for Weapon Shop, 1-3, R, Tab)
     window.addEventListener('keydown', (e) => {
       if (!this.isPlaying) return;
+
+      if (e.code === 'KeyB') {
+        this.toggleWeaponShop(!this.isShopOpen);
+      }
 
       if (e.code === 'Digit1') this.switchWeapon('assault');
       if (e.code === 'Digit2') this.switchWeapon('sniper');
@@ -296,6 +337,18 @@ class GameApp {
     });
   }
 
+  toggleWeaponShop(open) {
+    this.isShopOpen = open;
+    const modal = document.getElementById('weapon-shop-modal');
+    if (open) {
+      modal.classList.remove('hidden');
+      document.exitPointerLock();
+    } else {
+      modal.classList.add('hidden');
+      if (this.isPlaying) this.canvas.requestPointerLock();
+    }
+  }
+
   switchWeapon(weaponKey) {
     this.weapons.equip(weaponKey);
     document.querySelectorAll('.w-slot').forEach(s => s.classList.remove('active'));
@@ -313,7 +366,6 @@ class GameApp {
     const w = this.weapons.weapons[this.weapons.currentWeaponKey];
     if (!w) return;
 
-    // Fire rate check
     if (now - this.lastShotTime < w.fireRate) return;
     if (w.currentAmmo <= 0) {
       soundEngine.playClick(soundEngine.ctx ? soundEngine.ctx.currentTime : 0, 400, 0.05);
@@ -324,72 +376,39 @@ class GameApp {
     w.currentAmmo--;
     this.updateAmmoUI();
 
-    // Sound & Weapon Recoil Kick
     soundEngine.playGunshot(this.weapons.currentWeaponKey);
     this.weapons.triggerRecoil();
 
-    // Raycast shooting calculation
     const rayOrigin = this.camera.position.clone();
     const rayDir = new THREE.Vector3();
     this.camera.getWorldDirection(rayDir);
 
-    // Target meshes list
     const targets = [];
-    this.remotePlayers.forEach(p => {
-      targets.push(p.mesh);
-    });
-    this.bots.bots.forEach(b => {
-      if (b.health > 0) targets.push(b.mesh);
-    });
+    this.remotePlayers.forEach(p => targets.push(p.mesh));
     this.gameScene.colliders.forEach(c => targets.push(c));
 
     this.raycaster.set(rayOrigin, rayDir);
     const intersects = this.raycaster.intersectObjects(targets, true);
 
-    let endPos = rayOrigin.clone().addScaledVector(rayDir, 100);
+    let endPos = rayOrigin.clone().addScaledVector(rayDir, 120);
 
     if (intersects.length > 0) {
       const hit = intersects[0];
       endPos = hit.point.clone();
 
-      // Check hit object
-      let targetBot = null;
       let targetRemote = null;
-
-      // Identify bot target
-      this.bots.bots.forEach(b => {
-        if (b.mesh.getObjectById(hit.object.id) || b.mesh === hit.object) {
-          targetBot = b;
-        }
-      });
-
-      // Identify remote player
       this.remotePlayers.forEach(p => {
         if (p.mesh.getObjectById(hit.object.id) || p.mesh === hit.object) {
           targetRemote = p;
         }
       });
 
-      if (targetBot) {
-        const isHeadshot = hit.object === targetBot.headMesh;
-        const damage = w.damage * (isHeadshot ? w.headshotMult : 1.0);
-        targetBot.health = Math.max(0, targetBot.health - damage);
-
-        this.particles.createImpact(hit.point, hit.face.normal, true);
-        this.triggerHitmarker(isHeadshot, targetBot.health <= 0);
-
-        if (targetBot.health <= 0) {
-          this.kills++;
-          document.getElementById('hud-kills').textContent = this.kills;
-          this.addKillFeed(`${this.username} ${isHeadshot ? '🎯 HEADSHOT' : 'eliminated'} ${targetBot.username}`);
-
-          // Respawn Bot after 3s
-          setTimeout(() => {
-            targetBot.health = 100;
-            targetBot.position.set((Math.random() - 0.5) * 60, 3, (Math.random() - 0.5) * 60);
-          }, 3000);
+      if (targetRemote) {
+        // Prevent friendly fire in TDM
+        if (this.gameMode === 'TDM' && this.team === targetRemote.team) {
+          return;
         }
-      } else if (targetRemote) {
+
         const isHeadshot = hit.object === targetRemote.headMesh;
         const damage = w.damage * (isHeadshot ? w.headshotMult : 1.0);
 
@@ -399,22 +418,18 @@ class GameApp {
         this.socket.emit('deal_damage', {
           targetId: targetRemote.id,
           damage,
-          isHeadshot,
-          isBot: false
+          isHeadshot
         });
       } else {
-        // Wall spark impact
         this.particles.createImpact(hit.point, hit.face.normal, false);
       }
     }
 
-    // Tracer effect
     this.particles.createTracer(
       new THREE.Vector3().copy(rayOrigin).add(new THREE.Vector3(0.2, -0.2, -0.5).applyQuaternion(this.camera.quaternion)),
       endPos
     );
 
-    // Socket shoot emit
     this.socket.emit('shoot', {
       origin: rayOrigin,
       direction: rayDir,
@@ -452,6 +467,13 @@ class GameApp {
     }
   }
 
+  updateTDMScore(scores) {
+    if (scores) {
+      document.getElementById('score-alpha').textContent = scores.alpha;
+      document.getElementById('score-bravo').textContent = scores.bravo;
+    }
+  }
+
   addKillFeed(text) {
     const feed = document.getElementById('killfeed');
     const entry = document.createElement('div');
@@ -459,41 +481,37 @@ class GameApp {
     entry.textContent = text;
     feed.appendChild(entry);
 
-    setTimeout(() => {
-      entry.remove();
-    }, 4500);
+    setTimeout(() => entry.remove(), 4500);
   }
 
   updateRadar() {
     this.radarCtx.clearRect(0, 0, 130, 130);
     const center = 65;
-    const scale = 1.2;
+    const scale = 0.8;
 
-    // Draw radar background grid
     this.radarCtx.strokeStyle = 'rgba(0, 240, 255, 0.2)';
     this.radarCtx.beginPath();
     this.radarCtx.arc(center, center, 60, 0, Math.PI * 2);
     this.radarCtx.stroke();
 
-    // Draw player dot (Center Green)
+    // Player dot (Center Green)
     this.radarCtx.fillStyle = '#10b981';
     this.radarCtx.beginPath();
     this.radarCtx.arc(center, center, 4, 0, Math.PI * 2);
     this.radarCtx.fill();
 
-    // Draw Bots on Radar (Red dots)
-    this.bots.bots.forEach(b => {
-      if (b.health <= 0) return;
-      const dx = (b.position.x - this.player.position.x) * scale;
-      const dz = (b.position.z - this.player.position.z) * scale;
+    // Real Online Human Players on Radar
+    this.remotePlayers.forEach(p => {
+      const dx = (p.position.x - this.player.position.x) * scale;
+      const dz = (p.position.z - this.player.position.z) * scale;
 
       const rx = center + dx;
       const ry = center + dz;
 
       if (Math.hypot(dx, dz) < 58) {
-        this.radarCtx.fillStyle = '#ef4444';
+        this.radarCtx.fillStyle = p.team === 'alpha' ? '#00f0ff' : p.team === 'bravo' ? '#ff007f' : '#ef4444';
         this.radarCtx.beginPath();
-        this.radarCtx.arc(rx, ry, 3.5, 0, Math.PI * 2);
+        this.radarCtx.arc(rx, ry, 4, 0, Math.PI * 2);
         this.radarCtx.fill();
       }
     });
@@ -504,11 +522,11 @@ class GameApp {
     tbody.innerHTML = '';
 
     const list = [
-      { name: this.username, kills: this.kills, deaths: this.deaths, hp: Math.round(this.health) }
+      { name: this.username, team: this.team.toUpperCase(), kills: this.kills, deaths: this.deaths, hp: Math.round(this.health) }
     ];
 
-    this.bots.bots.forEach(b => {
-      list.push({ name: b.username, kills: Math.floor(Math.random() * 5), deaths: 2, hp: Math.round(b.health) });
+    this.remotePlayers.forEach(p => {
+      list.push({ name: p.username, team: (p.team || 'FFA').toUpperCase(), kills: 0, deaths: 0, hp: 100 });
     });
 
     list.sort((a, b) => b.kills - a.kills);
@@ -517,6 +535,7 @@ class GameApp {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${item.name}</td>
+        <td>${item.team}</td>
         <td>${item.kills}</td>
         <td>${item.deaths}</td>
         <td>${item.hp}%</td>
@@ -530,42 +549,11 @@ class GameApp {
 
     const delta = Math.min(this.clock.getDelta(), 0.1);
 
-    if (this.isPlaying) {
-      // Update Physics & Weapon positioning
+    if (this.isPlaying && !this.isShopOpen) {
       this.player.update(delta);
       this.weapons.update(delta);
       this.particles.update(delta);
 
-      // Update AI Opponent Bots & Bot Shooting at Player
-      this.bots.update(delta, this.player.position, (bot, origin, dir) => {
-        // Bot shoot callback
-        const endPos = new THREE.Vector3().copy(origin).addScaledVector(dir, 40);
-        this.particles.createTracer(origin, endPos);
-        soundEngine.playGunshot('assault');
-
-        // Check if bot shot hits player
-        const dist = origin.distanceTo(this.player.position);
-        if (dist < 30) {
-          this.health = Math.max(0, this.health - 12);
-          this.updateHealthUI();
-          soundEngine.playClick(soundEngine.ctx ? soundEngine.ctx.currentTime : 0, 100, 0.1);
-
-          if (this.health <= 0) {
-            this.deaths++;
-            document.getElementById('hud-deaths').textContent = this.deaths;
-            this.addKillFeed(`${bot.username} eliminated ${this.username}`);
-
-            // Respawn player after 3s
-            setTimeout(() => {
-              this.health = 100;
-              this.player.teleport(0, 0, 0);
-              this.updateHealthUI();
-            }, 3000);
-          }
-        }
-      });
-
-      // Socket Position Broadcast (10 Hz throttling)
       if (this.socket && this.socket.connected) {
         this.socket.emit('player_update', {
           x: this.player.position.x,
@@ -577,13 +565,11 @@ class GameApp {
         });
       }
 
-      // Smooth interpolation for remote players
       this.remotePlayers.forEach(p => {
-        p.position.lerp(p.targetPos, delta * 12);
-        p.mesh.rotation.y = THREE.MathUtils.lerp(p.mesh.rotation.y, p.targetRotY, delta * 12);
+        p.position.lerp(p.targetPos, delta * 14);
+        p.mesh.rotation.y = THREE.MathUtils.lerp(p.mesh.rotation.y, p.targetRotY, delta * 14);
       });
 
-      // Draw Mini-map Radar
       this.updateRadar();
     }
 
@@ -591,7 +577,6 @@ class GameApp {
   }
 }
 
-// Instantiate App on DOM load
 window.addEventListener('DOMContentLoaded', () => {
   new GameApp();
 });

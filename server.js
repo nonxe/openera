@@ -19,21 +19,18 @@ const io = new Server(httpServer, {
 
 const PORT = process.env.PORT || 3000;
 
-// Serve static files from dist in production
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// Player & Game state memory
+// Pure Real Player Game State (NO BOTS)
 const players = new Map();
-const bots = new Map();
-const killFeed = [];
+let gameMode = 'FFA'; // 'FFA' or 'TDM'
+let teamScores = { alpha: 0, bravo: 0 };
 
-// Helper to get local network IP addresses
 function getLocalIPs() {
   const interfaces = os.networkInterfaces();
   const addresses = [];
   for (const name of Object.keys(interfaces)) {
     for (const net of interfaces[name]) {
-      // Skip internal and non-IPv4 addresses
       if (net.family === 'IPv4' && !net.internal) {
         addresses.push(net.address);
       }
@@ -42,16 +39,18 @@ function getLocalIPs() {
   return addresses;
 }
 
-// Spawning points around the map
+// Spawning points across Mega City District
 const SPAWN_POINTS = [
-  { x: 0, y: 0, z: -35 },
-  { x: 35, y: 0, z: 0 },
-  { x: -35, y: 0, z: 0 },
-  { x: 0, y: 0, z: 35 },
-  { x: 20, y: 0, z: 20 },
-  { x: -20, y: 0, z: -20 },
-  { x: 55, y: 8, z: -55 }, // Corner Sniper Tower
-  { x: -55, y: 8, z: 55 }  // Corner Sniper Tower
+  { x: 0, y: 0, z: -60 },
+  { x: 60, y: 0, z: 0 },
+  { x: -60, y: 0, z: 0 },
+  { x: 0, y: 0, z: 60 },
+  { x: 45, y: 0, z: 45 },
+  { x: -45, y: 0, z: -45 },
+  { x: 80, y: 0, z: -80 },
+  { x: -80, y: 0, z: 80 },
+  { x: 0, y: 14, z: -20 }, // Skybridge Spawn
+  { x: -70, y: 12, z: -70 } // Rooftop Spawn
 ];
 
 function getRandomSpawn() {
@@ -59,14 +58,28 @@ function getRandomSpawn() {
 }
 
 io.on('connection', (socket) => {
-  console.log(`[+] Player connected: ${socket.id}`);
+  console.log(`[+] Real Player Connected: ${socket.id}`);
 
-  // Handle player join
   socket.on('join_game', (data) => {
     const spawn = getRandomSpawn();
+    
+    // Assign team for TDM mode automatically to balance teams
+    let team = 'none';
+    if (data.mode) gameMode = data.mode;
+
+    if (gameMode === 'TDM') {
+      let alphaCount = 0;
+      let bravoCount = 0;
+      players.forEach(p => {
+        if (p.team === 'alpha') alphaCount++;
+        if (p.team === 'bravo') bravoCount++;
+      });
+      team = alphaCount <= bravoCount ? 'alpha' : 'bravo';
+    }
+
     const player = {
       id: socket.id,
-      username: data.username || `Operative_${socket.id.slice(0, 4)}`,
+      username: data.username || `Player_${socket.id.slice(0, 4)}`,
       x: spawn.x,
       y: spawn.y,
       z: spawn.z,
@@ -77,24 +90,32 @@ io.on('connection', (socket) => {
       kills: 0,
       deaths: 0,
       weapon: data.weapon || 'assault',
-      color: data.color || '#00f0ff',
-      isBot: false
+      team: team,
+      color: team === 'alpha' ? '#00f0ff' : team === 'bravo' ? '#ff007f' : '#10b981'
     };
 
     players.set(socket.id, player);
 
-    // Send current game state to new player
+    // Send init state to joined player
     socket.emit('init_state', {
       selfId: socket.id,
-      players: Array.from(players.values()),
-      bots: Array.from(bots.values())
+      mode: gameMode,
+      teamScores,
+      players: Array.from(players.values())
     });
 
     // Notify all other clients
     socket.broadcast.emit('player_joined', player);
   });
 
-  // Handle player motion update
+  socket.on('change_weapon', (data) => {
+    const p = players.get(socket.id);
+    if (p) {
+      p.weapon = data.weapon;
+      socket.broadcast.emit('player_changed_weapon', { id: socket.id, weapon: data.weapon });
+    }
+  });
+
   socket.on('player_update', (data) => {
     const p = players.get(socket.id);
     if (!p) return;
@@ -117,12 +138,10 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Handle player shooting
   socket.on('shoot', (data) => {
     const shooter = players.get(socket.id);
     if (!shooter) return;
 
-    // Broadcast shoot effect to others
     socket.broadcast.emit('player_shot', {
       id: socket.id,
       origin: data.origin,
@@ -131,27 +150,26 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Handle hit damage calculation
   socket.on('deal_damage', (data) => {
-    const { targetId, damage, isHeadshot, isBot } = data;
+    const { targetId, damage, isHeadshot } = data;
     const attacker = players.get(socket.id);
-    if (!attacker) return;
+    const target = players.get(targetId);
 
-    let target = isBot ? bots.get(targetId) : players.get(targetId);
-    if (!target || target.health <= 0) return;
+    if (!attacker || !target || target.health <= 0) return;
+
+    // Prevent friendly fire in TDM mode
+    if (gameMode === 'TDM' && attacker.team === target.team) {
+      return;
+    }
 
     target.health = Math.max(0, target.health - damage);
 
-    // Notify target client if human
-    if (!isBot) {
-      io.to(targetId).emit('damaged', {
-        damage,
-        attackerId: socket.id,
-        health: target.health
-      });
-    }
+    io.to(targetId).emit('damaged', {
+      damage,
+      attackerId: socket.id,
+      health: target.health
+    });
 
-    // Confirm hit to attacker
     socket.emit('hit_confirmed', {
       targetId,
       damage,
@@ -159,10 +177,14 @@ io.on('connection', (socket) => {
       killed: target.health <= 0
     });
 
-    // Handle elimination
     if (target.health <= 0) {
       attacker.kills++;
       target.deaths++;
+
+      if (gameMode === 'TDM') {
+        if (attacker.team === 'alpha') teamScores.alpha++;
+        else if (attacker.team === 'bravo') teamScores.bravo++;
+      }
 
       const eventText = `${attacker.username} ${isHeadshot ? '🎯 HEADSHOT' : 'eliminated'} ${target.username}`;
 
@@ -172,40 +194,28 @@ io.on('connection', (socket) => {
         killerName: attacker.username,
         victimName: target.username,
         isHeadshot,
+        teamScores,
         text: eventText
       });
 
-      // Respawn target after 3s
+      // Respawn after 3s
       setTimeout(() => {
-        if (isBot) {
-          const b = bots.get(targetId);
-          if (b) {
-            const spawn = getRandomSpawn();
-            b.x = spawn.x;
-            b.y = spawn.y;
-            b.z = spawn.z;
-            b.health = 100;
-            io.emit('bot_respawned', b);
-          }
-        } else {
-          const p = players.get(targetId);
-          if (p) {
-            const spawn = getRandomSpawn();
-            p.x = spawn.x;
-            p.y = spawn.y;
-            p.z = spawn.z;
-            p.health = 100;
-            io.to(targetId).emit('respawn', { x: p.x, y: p.y, z: p.z, health: 100 });
-            io.emit('player_respawned', { id: targetId, x: p.x, y: p.y, z: p.z });
-          }
+        const p = players.get(targetId);
+        if (p) {
+          const spawn = getRandomSpawn();
+          p.x = spawn.x;
+          p.y = spawn.y;
+          p.z = spawn.z;
+          p.health = 100;
+          io.to(targetId).emit('respawn', { x: p.x, y: p.y, z: p.z, health: 100 });
+          io.emit('player_respawned', { id: targetId, x: p.x, y: p.y, z: p.z });
         }
       }, 3000);
     }
   });
 
-  // Handle disconnect
   socket.on('disconnect', () => {
-    console.log(`[-] Player disconnected: ${socket.id}`);
+    console.log(`[-] Player Disconnected: ${socket.id}`);
     players.delete(socket.id);
     io.emit('player_left', { id: socket.id });
   });
@@ -214,7 +224,7 @@ io.on('connection', (socket) => {
 httpServer.listen(PORT, '0.0.0.0', () => {
   const localIPs = getLocalIPs();
   console.log('\n==================================================');
-  console.log(`⚡ OPENERA GAME SERVER RUNNING ON PORT ${PORT}`);
+  console.log(`⚡ OPENERA MEGA CITY REAL-PLAYER SERVER RUNNING ON PORT ${PORT}`);
   console.log(`🌐 Local Host URL : http://localhost:${PORT}`);
   localIPs.forEach(ip => {
     console.log(`🌐 Network Play   : http://${ip}:${PORT}`);

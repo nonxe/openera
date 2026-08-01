@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OPENERA - 3D Browser FPS Multiplayer</title>
+  <title>OPENERA - 3D Cyberpunk Online Multiplayer FPS</title>
   <link rel="stylesheet" href="/src/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -28,6 +28,33 @@
       <div id="hitmarker" class="hidden"></div>
     </div>
 
+    <!-- In-Game Mid-Match Weapon Selector / Buy Menu (Press B Key) -->
+    <div id="weapon-shop-modal" class="hidden">
+      <div class="shop-card">
+        <div class="shop-header">
+          <h2>ARMORY / WEAPON SELECTOR</h2>
+          <p>Press <kbd>B</kbd> or <kbd>ESC</kbd> to exit menu</p>
+        </div>
+        <div class="shop-grid">
+          <div class="shop-item" data-weapon="assault">
+            <div class="item-title">ASSAULT RIFLE</div>
+            <div class="item-desc">Automatic • High Rate of Fire • 30 Mag</div>
+            <button class="btn-select-w">EQUIP (1)</button>
+          </div>
+          <div class="shop-item" data-weapon="sniper">
+            <div class="item-title">HEAVY SNIPER</div>
+            <div class="item-desc">High Damage • Long Scope ADS • 5 Mag</div>
+            <button class="btn-select-w">EQUIP (2)</button>
+          </div>
+          <div class="shop-item" data-weapon="pistol">
+            <div class="item-title">TACTICAL PISTOL</div>
+            <div class="item-desc">Sidearm • Fast Reload • 12 Mag</div>
+            <button class="btn-select-w">EQUIP (3)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- HUD Overlay -->
     <div id="hud" class="hidden">
       <!-- Top Left Stats & Local IP Info -->
@@ -38,8 +65,15 @@
         </div>
         <div class="net-badge">
           <span class="status-dot"></span>
-          <span id="hud-ip-display">LAN: ONLINE</span>
+          <span id="hud-ip-display">ONLINE REAL PLAYERS</span>
         </div>
+      </div>
+
+      <!-- Top Center TDM Team Scores (Visible in TDM mode) -->
+      <div id="tdm-score-box" class="hidden">
+        <div class="team-score alpha">ALPHA: <span id="score-alpha">0</span></div>
+        <div class="tdm-vs">VS</div>
+        <div class="team-score bravo">BRAVO: <span id="score-bravo">0</span></div>
       </div>
 
       <!-- Top Right Kill Feed -->
@@ -59,8 +93,9 @@
         </div>
       </div>
 
-      <!-- Bottom Right Ammo & Weapon -->
+      <!-- Bottom Right Ammo & Weapon Shop Button -->
       <div class="hud-bottom-right">
+        <button id="btn-open-shop" class="btn-shop-trigger">🛒 WEAPON SHOP (B)</button>
         <div class="weapon-name" id="hud-weapon-name">ASSAULT RIFLE</div>
         <div class="ammo-display">
           <span id="hud-ammo-current">30</span>
@@ -81,6 +116,7 @@
           <thead>
             <tr>
               <th>PLAYER</th>
+              <th>TEAM</th>
               <th>KILLS</th>
               <th>DEATHS</th>
               <th>HEALTH</th>
@@ -96,16 +132,24 @@
       <div class="lobby-card">
         <div class="logo">
           <h1>OPEN<span class="highlight">ERA</span></h1>
-          <p class="subtitle">TACTICAL 3D MULTIPLAYER FPS</p>
+          <p class="subtitle">MEGA CITY MULTIPLAYER FPS</p>
         </div>
 
         <div class="input-group">
           <label for="username-input">CALLSIGN / USERNAME</label>
-          <input type="text" id="username-input" placeholder="Enter your callsign..." maxlength="16" value="Agent_Nova">
+          <input type="text" id="username-input" placeholder="Enter callsign..." maxlength="16" value="Viper_X">
         </div>
 
         <div class="input-group">
-          <label>SELECT LOADOUT WEAPON</label>
+          <label>SELECT GAME MODE</label>
+          <div class="mode-selector">
+            <button class="mode-btn active" data-mode="FFA">FREE FOR ALL (FFA)</button>
+            <button class="mode-btn" data-mode="TDM">TEAM DEATHMATCH (TDM)</button>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>SELECT STARTING WEAPON</label>
           <div class="loadout-selector">
             <button class="loadout-btn active" data-weapon="assault">Assault Rifle</button>
             <button class="loadout-btn" data-weapon="sniper">Sniper Rifle</button>
@@ -114,22 +158,21 @@
         </div>
 
         <div class="server-box">
-          <div class="server-title">LOCAL HOST & NETWORK CONNECTIVITY</div>
-          <p>Host server runs on <code>0.0.0.0:3000</code>. Share your local IP address with friends on the same Wi-Fi network to play online together!</p>
+          <div class="server-title">REAL-PLAYER ONLINE MULTIPLAYER</div>
+          <p>Pure human online match (No Bots). Share your IP address with friends to join the same Mega City arena live!</p>
         </div>
 
-        <button id="btn-deploy" class="btn-primary">DEPLOY TO ARENA</button>
+        <button id="btn-deploy" class="btn-primary">JOIN MATCH</button>
 
         <div class="controls-guide">
           <span><b>WASD</b> Move</span> • 
           <span><b>MOUSE</b> Aim</span> • 
           <span><b>CLICK</b> Shoot</span> • 
-          <span><b>RIGHT CLICK</b> Scope/ADS</span> • 
+          <span><b>RIGHT CLICK</b> Scope</span> • 
           <span><b>SHIFT</b> Sprint</span> • 
-          <span><b>C</b> Crouch / Slide</span> • 
-          <span><b>SPACE</b> Jump</span> • 
-          <span><b>1-3</b> Switch Weapon</span> • 
-          <span><b>R</b> Reload</span>
+          <span><b>C</b> Slide</span> • 
+          <span><b>B</b> Weapon Shop</span> • 
+          <span><b>1-3</b> Quick Switch</span>
         </div>
       </div>
     </div>

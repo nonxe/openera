@@ -30,6 +30,15 @@ body, html {
   display: none !important;
 }
 
+kbd {
+  background: #1e293b;
+  border: 1px solid #475569;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #00f0ff;
+  font-weight: bold;
+}
+
 /* --- LOBBY SCREEN --- */
 #lobby-screen {
   position: absolute;
@@ -37,8 +46,8 @@ body, html {
   left: 0;
   width: 100%;
   height: 100%;
-  background: radial-gradient(circle at center, rgba(15, 23, 42, 0.75) 0%, rgba(5, 7, 15, 0.95) 100%);
-  backdrop-filter: blur(12px);
+  background: radial-gradient(circle at center, rgba(15, 23, 42, 0.8) 0%, rgba(5, 7, 15, 0.95) 100%);
+  backdrop-filter: blur(14px);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -46,19 +55,19 @@ body, html {
 }
 
 .lobby-card {
-  width: 480px;
-  background: rgba(15, 23, 42, 0.85);
+  width: 500px;
+  background: rgba(15, 23, 42, 0.9);
   border: 1px solid rgba(0, 240, 255, 0.3);
-  box-shadow: 0 0 40px rgba(0, 240, 255, 0.15), inset 0 0 20px rgba(255, 255, 255, 0.02);
+  box-shadow: 0 0 45px rgba(0, 240, 255, 0.2);
   border-radius: 16px;
-  padding: 36px;
+  padding: 32px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .logo h1 {
-  font-size: 3rem;
+  font-size: 2.8rem;
   font-weight: 900;
   letter-spacing: 2px;
   color: #fff;
@@ -72,7 +81,7 @@ body, html {
 
 .logo .subtitle {
   text-align: center;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: #94a3b8;
   letter-spacing: 3px;
 }
@@ -80,11 +89,11 @@ body, html {
 .input-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .input-group label {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 1px;
   color: #38bdf8;
@@ -92,12 +101,12 @@ body, html {
 
 .input-group input {
   width: 100%;
-  padding: 12px 16px;
+  padding: 10px 14px;
   background: rgba(30, 41, 59, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   color: #fff;
-  font-size: 1rem;
+  font-size: 0.95rem;
   outline: none;
   transition: all 0.2s ease;
 }
@@ -107,57 +116,54 @@ body, html {
   box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
 }
 
-.loadout-selector {
+.mode-selector, .loadout-selector {
   display: flex;
   gap: 8px;
 }
 
-.loadout-btn {
+.mode-btn, .loadout-btn {
   flex: 1;
   padding: 10px;
   background: rgba(30, 41, 59, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   color: #94a3b8;
-  font-weight: 600;
+  font-size: 0.8rem;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.loadout-btn.active, .loadout-btn:hover {
+.mode-btn.active, .loadout-btn.active, .mode-btn:hover, .loadout-btn:hover {
   background: rgba(0, 240, 255, 0.15);
   border-color: #00f0ff;
   color: #fff;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
 }
 
 .server-box {
   background: rgba(16, 185, 129, 0.1);
   border: 1px solid rgba(16, 185, 129, 0.3);
-  padding: 12px;
+  padding: 10px 12px;
   border-radius: 8px;
 }
 
 .server-title {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 800;
   color: #10b981;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .server-box p {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: #cbd5e1;
   line-height: 1.4;
 }
 
-.server-box code {
-  color: #00f0ff;
-  font-weight: bold;
-}
-
 .btn-primary {
   width: 100%;
-  padding: 16px;
+  padding: 14px;
   background: linear-gradient(135deg, #00f0ff 0%, #0077ff 100%);
   border: none;
   border-radius: 8px;
@@ -183,6 +189,121 @@ body, html {
 
 .controls-guide b {
   color: #cbd5e1;
+}
+
+/* --- WEAPON SHOP MODAL (B KEY MID-MATCH) --- */
+#weapon-shop-modal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(5, 7, 15, 0.85);
+  backdrop-filter: blur(10px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 90;
+}
+
+.shop-card {
+  width: 650px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid #00f0ff;
+  box-shadow: 0 0 35px rgba(0, 240, 255, 0.3);
+  border-radius: 14px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.shop-header h2 {
+  font-size: 1.4rem;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #00f0ff;
+}
+
+.shop-header p {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.shop-item {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  transition: all 0.2s ease;
+}
+
+.shop-item:hover {
+  border-color: #00f0ff;
+  background: rgba(0, 240, 255, 0.1);
+}
+
+.item-title {
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: #fff;
+}
+
+.item-desc {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.btn-select-w {
+  width: 100%;
+  padding: 8px;
+  background: #00f0ff;
+  border: none;
+  border-radius: 6px;
+  color: #000;
+  font-weight: 800;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+/* --- TDM TEAM SCORES HEADER --- */
+#tdm-score-box {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 8px 24px;
+  border-radius: 8px;
+}
+
+.team-score {
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+
+.team-score.alpha { color: #00f0ff; }
+.team-score.bravo { color: #ff007f; }
+
+.tdm-vs {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #64748b;
 }
 
 /* --- CROSSHAIR & HITMARKER --- */
@@ -221,9 +342,7 @@ body, html {
   transition: opacity 0.1s ease;
 }
 
-#hitmarker.active {
-  opacity: 1;
-}
+#hitmarker.active { opacity: 1; }
 
 /* --- SNIPER SCOPE OVERLAY --- */
 #scope-overlay {
@@ -330,12 +449,6 @@ body, html {
   font-size: 0.85rem;
   font-weight: 600;
   color: #fff;
-  animation: slideIn 0.2s ease-out;
-}
-
-@keyframes slideIn {
-  from { transform: translateX(50px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
 }
 
 .radar-container {
@@ -378,7 +491,7 @@ body, html {
 #health-bar-fill {
   height: 100%;
   background: linear-gradient(90deg, #10b981 0%, #059669 100%);
-  transition: width 0.2s ease, background 0.2s ease;
+  transition: width 0.2s ease;
 }
 
 #health-value {
@@ -389,7 +502,6 @@ body, html {
   font-size: 0.9rem;
   font-weight: 900;
   color: #fff;
-  text-shadow: 0 0 4px #000;
 }
 
 .hud-bottom-right {
@@ -398,6 +510,24 @@ body, html {
   align-items: flex-end;
   gap: 6px;
   align-self: flex-end;
+  pointer-events: auto;
+}
+
+.btn-shop-trigger {
+  padding: 6px 12px;
+  background: rgba(0, 240, 255, 0.15);
+  border: 1px solid #00f0ff;
+  border-radius: 6px;
+  color: #00f0ff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-shop-trigger:hover {
+  background: #00f0ff;
+  color: #000;
 }
 
 .weapon-name {
@@ -446,7 +576,7 @@ body, html {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 500px;
+  width: 550px;
   background: rgba(15, 23, 42, 0.95);
   border: 1px solid #00f0ff;
   border-radius: 12px;
