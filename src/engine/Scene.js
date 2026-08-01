@@ -1,57 +1,104 @@
 import * as THREE from 'three';
+import { TextureGen } from './TextureGen.js';
 
 export class GameScene {
   constructor() {
     this.scene = new THREE.Scene();
     this.colliders = [];
     this.jumpPads = [];
-    this.interactiveObjects = [];
 
     this.initLightingAndEnvironment();
     this.buildMegaCityMap();
   }
 
   initLightingAndEnvironment() {
-    // Cyberpunk Sunset / Night Sky
-    this.scene.background = new THREE.Color(0x0a0e1a);
-    this.scene.fog = new THREE.FogExp2(0x0a0e1a, 0.005); // Deep distance fog
+    // Dynamic Sky Dome & Fog
+    this.scene.background = new THREE.Color(0x1e293b);
+    this.scene.fog = new THREE.FogExp2(0x1e293b, 0.004);
 
-    // Ambient Sky & Ground light
-    const ambientLight = new THREE.AmbientLight(0x64748b, 0.6);
+    // Create Sky Hemisphere Gradient Dome
+    const skyGeo = new THREE.SphereGeometry(380, 32, 32);
+    const skyMat = new THREE.ShaderMaterial({
+      uniforms: {
+        topColor: { value: new THREE.Color(0x0284c7) },    // Vibrant Sky Blue
+        bottomColor: { value: new THREE.Color(0xfba518) }, // Golden Sunset Glow
+        offset: { value: 30 },
+        exponent: { value: 0.6 }
+      },
+      vertexShader: `
+        varying vec3 vWorldPosition;
+        void main() {
+          vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPosition.xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 topColor;
+        uniform vec3 bottomColor;
+        uniform float offset;
+        uniform float exponent;
+        varying vec3 vWorldPosition;
+        void main() {
+          float h = normalize(vWorldPosition + offset).y;
+          gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
+        }
+      `,
+      side: THREE.BackSide
+    });
+    const skyMesh = new THREE.Mesh(skyGeo, skyMat);
+    this.scene.add(skyMesh);
+
+    // Ambient Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     this.scene.add(ambientLight);
 
-    const hemiLight = new THREE.HemisphereLight(0x38bdf8, 0x0f172a, 0.6);
+    const hemiLight = new THREE.HemisphereLight(0x38bdf8, 0x334155, 0.8);
     this.scene.add(hemiLight);
 
-    // Directional Sunset Sunlight (Casts long dramatic shadows across the city)
-    const sunLight = new THREE.DirectionalLight(0xfba518, 1.5);
-    sunLight.position.set(120, 150, 90);
+    // Directional Sun Light
+    const sunLight = new THREE.DirectionalLight(0xffedd5, 2.0);
+    sunLight.position.set(140, 180, 100);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 4096;
     sunLight.shadow.mapSize.height = 4096;
     sunLight.shadow.camera.near = 1;
-    sunLight.shadow.camera.far = 350;
-    const d = 160;
+    sunLight.shadow.camera.far = 400;
+    const d = 180;
     sunLight.shadow.camera.left = -d;
     sunLight.shadow.camera.right = d;
     sunLight.shadow.camera.top = d;
     sunLight.shadow.camera.bottom = -d;
-    sunLight.shadow.bias = -0.0003;
+    sunLight.shadow.bias = -0.0002;
     this.scene.add(sunLight);
   }
 
   buildMegaCityMap() {
-    // --- MATERIALS ---
-    const roadMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.8, metalness: 0.2 });
-    const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x374151, roughness: 0.7, metalness: 0.1 });
-    const buildingMatA = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3, metalness: 0.7 });
-    const buildingMatB = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2, metalness: 0.8 });
-    const glassMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.1, metalness: 0.9 });
-    const metalMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.4, metalness: 0.8 });
+    // --- PROCEDURAL TEXTURES ---
+    const roadTexture = TextureGen.createRoadTexture();
+    roadTexture.repeat.set(16, 16);
 
+    const bldTextureA = TextureGen.createBuildingTexture('#334155', '#38bdf8');
+    bldTextureA.repeat.set(2, 4);
+
+    const bldTextureB = TextureGen.createBuildingTexture('#1e293b', '#f59e0b');
+    bldTextureB.repeat.set(2, 5);
+
+    const containerRedTex = TextureGen.createContainerTexture('#dc2626');
+    const containerBlueTex = TextureGen.createContainerTexture('#2563eb');
+    const containerYellowTex = TextureGen.createContainerTexture('#d97706');
+    const containerGreenTex = TextureGen.createContainerTexture('#059669');
+
+    // Materials
+    const roadMat = new THREE.MeshStandardMaterial({ map: roadTexture, roughness: 0.6, metalness: 0.2 });
+    const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.8 });
+
+    const buildingMatA = new THREE.MeshStandardMaterial({ map: bldTextureA, roughness: 0.4, metalness: 0.6 });
+    const buildingMatB = new THREE.MeshStandardMaterial({ map: bldTextureB, roughness: 0.3, metalness: 0.7 });
+
+    const metalFrameMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3, metalness: 0.9 });
     const neonCyanMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
     const neonPinkMat = new THREE.MeshBasicMaterial({ color: 0xff007f });
-    const neonYellowMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
 
     const jumpPadMat = new THREE.MeshStandardMaterial({
       color: 0x10b981,
@@ -60,7 +107,7 @@ export class GameScene {
       roughness: 0.2
     });
 
-    // --- 1. MAIN CITY ASPHALT GROUND (300m x 300m) ---
+    // --- 1. MAIN ROAD GROUND (320m x 320m) ---
     const groundGeo = new THREE.BoxGeometry(320, 2, 320);
     const ground = new THREE.Mesh(groundGeo, roadMat);
     ground.position.set(0, -1, 0);
@@ -68,56 +115,42 @@ export class GameScene {
     this.scene.add(ground);
     this.colliders.push(ground);
 
-    // City Road Grid Lines
-    const grid = new THREE.GridHelper(320, 40, 0x00f0ff, 0x1e293b);
-    grid.position.y = 0.01;
-    this.scene.add(grid);
-
-    // --- 2. PERIMETER MEGA SKYSCRAPERS (Out of bounds city backdrop) ---
-    const arenaLimit = 320;
-    const boundaryWallHeight = 35;
-    const wallGeoH = new THREE.BoxGeometry(arenaLimit, boundaryWallHeight, 4);
-    const wallGeoV = new THREE.BoxGeometry(4, boundaryWallHeight, arenaLimit);
-
-    const bWalls = [
-      { geo: wallGeoH, pos: [0, boundaryWallHeight / 2, -arenaLimit / 2] },
-      { geo: wallGeoH, pos: [0, boundaryWallHeight / 2, arenaLimit / 2] },
-      { geo: wallGeoV, pos: [arenaLimit / 2, boundaryWallHeight / 2, 0] },
-      { geo: wallGeoV, pos: [-arenaLimit / 2, boundaryWallHeight / 2, 0] }
+    // --- 2. SIDEWALKS & CITY BLOCKS ---
+    const sidewalkBlocks = [
+      { x: -50, z: -80, w: 70, h: 0.4, d: 70 },
+      { x: 50, z: -80, w: 70, h: 0.4, d: 70 },
+      { x: -50, z: 80, w: 70, h: 0.4, d: 70 },
+      { x: 50, z: 80, w: 70, h: 0.4, d: 70 },
+      { x: 0, z: 0, w: 80, h: 0.4, d: 80 } // Central Plaza
     ];
 
-    bWalls.forEach(w => {
-      const mesh = new THREE.Mesh(w.geo, buildingMatB);
-      mesh.position.set(...w.pos);
-      mesh.castShadow = true;
+    sidewalkBlocks.forEach(s => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(s.w, s.h, s.d), sidewalkMat);
+      mesh.position.set(s.x, s.h / 2, s.z);
       mesh.receiveShadow = true;
       this.scene.add(mesh);
-      this.colliders.push(mesh);
     });
 
-    // --- 3. CITY DISTRICT BUILDINGS & SKYSCRAPERS ---
+    // --- 3. CITY BUILDINGS & SKYSCRAPERS ---
     const cityBuildings = [
-      // Central North Block
-      { x: -50, z: -80, w: 30, h: 40, d: 30, mat: buildingMatA },
-      { x: 0, z: -90, w: 40, h: 55, d: 35, mat: buildingMatB },
-      { x: 50, z: -80, w: 30, h: 45, d: 30, mat: buildingMatA },
+      // North Block
+      { x: -55, z: -85, w: 32, h: 48, d: 32, mat: buildingMatA },
+      { x: -15, z: -90, w: 36, h: 60, d: 36, mat: buildingMatB },
+      { x: 25, z: -90, w: 36, h: 52, d: 36, mat: buildingMatA },
+      { x: 60, z: -85, w: 32, h: 45, d: 32, mat: buildingMatB },
 
-      // Central South Block
-      { x: -50, z: 80, w: 30, h: 45, d: 30, mat: buildingMatA },
-      { x: 0, z: 90, w: 40, h: 50, d: 35, mat: buildingMatB },
-      { x: 50, z: 80, w: 30, h: 40, d: 30, mat: buildingMatA },
+      // South Block
+      { x: -55, z: 85, w: 32, h: 50, d: 32, mat: buildingMatB },
+      { x: 0, z: 90, w: 45, h: 65, d: 40, mat: buildingMatA },
+      { x: 55, z: 85, w: 32, h: 46, d: 32, mat: buildingMatB },
 
-      // West District
-      { x: -90, z: -30, w: 35, h: 48, d: 40, mat: buildingMatB },
-      { x: -90, z: 30, w: 35, h: 52, d: 40, mat: buildingMatA },
+      // West & East Wings
+      { x: -100, z: 0, w: 40, h: 55, d: 60, mat: buildingMatA },
+      { x: 100, z: 0, w: 40, h: 58, d: 60, mat: buildingMatB },
 
-      // East District
-      { x: 90, z: -30, w: 35, h: 50, d: 40, mat: buildingMatA },
-      { x: 90, z: 30, w: 35, h: 45, d: 40, mat: buildingMatB },
-
-      // Central Plaza Surrounding Structures (Accessible Balconies)
-      { x: -35, z: 0, w: 20, h: 14, d: 25, mat: buildingMatA },
-      { x: 35, z: 0, w: 20, h: 14, d: 25, mat: buildingMatA }
+      // Central Plaza Structures (Accessible Walkways & Balconies)
+      { x: -35, z: 0, w: 22, h: 14, d: 28, mat: buildingMatA },
+      { x: 35, z: 0, w: 22, h: 14, d: 28, mat: buildingMatA }
     ];
 
     cityBuildings.forEach(b => {
@@ -129,101 +162,100 @@ export class GameScene {
       this.scene.add(mesh);
       this.colliders.push(mesh);
 
-      // Glowing Neon Accent Lines on Buildings
-      const neonBandGeo = new THREE.BoxGeometry(b.w + 0.4, 0.6, b.d + 0.4);
-      const neonMatChoice = Math.random() > 0.5 ? neonCyanMat : neonPinkMat;
-      const neonBand = new THREE.Mesh(neonBandGeo, neonMatChoice);
-      neonBand.position.set(b.x, b.h - 4, b.z);
-      this.scene.add(neonBand);
+      // Roof Edge Neon Band
+      const trimGeo = new THREE.BoxGeometry(b.w + 0.4, 0.8, b.d + 0.4);
+      const trimMat = Math.random() > 0.5 ? neonCyanMat : neonPinkMat;
+      const trim = new THREE.Mesh(trimGeo, trimMat);
+      trim.position.set(b.x, b.h - 0.4, b.z);
+      this.scene.add(trim);
     });
 
-    // --- 4. ELEVATED SKYBRIDGES (Connecting Rooftops & Balconies) ---
-    // Skybridge 1 (Central Plaza West to East Platform - Height 14m)
-    const bridge1 = new THREE.Mesh(new THREE.BoxGeometry(50, 1, 6), metalMat);
+    // --- 4. SKYBRIDGES (Connecting Rooftops) ---
+    const bridge1 = new THREE.Mesh(new THREE.BoxGeometry(50, 1.2, 7), metalFrameMat);
     bridge1.position.set(0, 14, 0);
     bridge1.castShadow = true;
     bridge1.receiveShadow = true;
     this.scene.add(bridge1);
     this.colliders.push(bridge1);
 
-    // Bridge 1 Railings
-    const rail1A = new THREE.Mesh(new THREE.BoxGeometry(50, 1.2, 0.2), metalMat);
-    rail1A.position.set(0, 15, 3);
-    this.scene.add(rail1A);
-    this.colliders.push(rail1A);
+    // Bridge Railings
+    const railA = new THREE.Mesh(new THREE.BoxGeometry(50, 1.4, 0.3), metalFrameMat);
+    railA.position.set(0, 15.2, 3.4);
+    this.scene.add(railA);
+    this.colliders.push(railA);
 
-    const rail1B = new THREE.Mesh(new THREE.BoxGeometry(50, 1.2, 0.2), metalMat);
-    rail1B.position.set(0, 15, -3);
-    this.scene.add(rail1B);
-    this.colliders.push(rail1B);
+    const railB = new THREE.Mesh(new THREE.BoxGeometry(50, 1.4, 0.3), metalFrameMat);
+    railB.position.set(0, 15.2, -3.4);
+    this.scene.add(railB);
+    this.colliders.push(railB);
 
-    // Ramps leading up to Skybridge from Central Plaza
+    // Ramps to Skybridge
     this.createRamp(-15, 7, 0, 5, 14, 25, 0);
     this.createRamp(15, 7, 0, 5, 14, 25, 0);
 
-    // --- 5. CENTRAL URBAN PLAZA MONUMENT ---
-    const monumentBase = new THREE.Mesh(new THREE.BoxGeometry(16, 3, 16), metalMat);
-    monumentBase.position.set(0, 1.5, 35);
-    monumentBase.castShadow = true;
-    monumentBase.receiveShadow = true;
-    this.scene.add(monumentBase);
-    this.colliders.push(monumentBase);
-
-    // Glowing Neon Hologram Pillar
-    const holoPillar = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 12, 16), neonCyanMat);
-    holoPillar.position.set(0, 9, 35);
-    this.scene.add(holoPillar);
-
-    const holoLight = new THREE.PointLight(0x00f0ff, 3, 30);
-    holoLight.position.set(0, 9, 35);
-    this.scene.add(holoLight);
-
-    // --- 6. VEHICLES & TACTICAL STREET COVER BLOCKS ---
-    const vehicles = [
-      { x: -12, z: -30, rot: 0.3 },
-      { x: 14, z: -30, rot: -0.2 },
-      { x: -20, z: 50, rot: 1.2 },
-      { x: 20, z: 50, rot: -0.8 },
-      { x: -60, z: 0, rot: 0 },
-      { x: 60, z: 0, rot: Math.PI / 2 }
+    // --- 5. CORRUGATED SHIPPING CONTAINERS ---
+    const containers = [
+      { x: -35, y: 2.5, z: -35, rot: 0, tex: containerRedTex },
+      { x: -35, y: 7.5, z: -35, rot: 0.1, tex: containerRedTex }, // Stacked!
+      { x: 35, y: 2.5, z: -35, rot: 0.4, tex: containerBlueTex },
+      { x: 35, y: 7.5, z: -35, rot: 0.4, tex: containerBlueTex }, // Stacked!
+      { x: -50, y: 2.5, z: 25, rot: -0.5, tex: containerYellowTex },
+      { x: 50, y: 2.5, z: 25, rot: 0.3, tex: containerGreenTex },
+      { x: 0, y: 2.5, z: 45, rot: Math.PI / 2, tex: containerRedTex }
     ];
 
-    vehicles.forEach(v => {
-      // Tactical Armored Van Body
-      const body = new THREE.Mesh(new THREE.BoxGeometry(4.5, 3, 9), buildingMatB);
-      body.position.set(v.x, 1.5, v.z);
-      body.rotation.y = v.rot;
-      body.castShadow = true;
-      body.receiveShadow = true;
-      this.scene.add(body);
-      this.colliders.push(body);
-
-      // Headlight glow
-      const headlight = new THREE.PointLight(0xf59e0b, 1.5, 15);
-      headlight.position.set(v.x, 1.8, v.z - 4);
-      this.scene.add(headlight);
-    });
-
-    // Concrete Jersey Barriers
-    const streetBarriers = [
-      { x: -5, z: -15, sx: 8, sy: 2.2, sz: 1.2 },
-      { x: 5, z: -15, sx: 8, sy: 2.2, sz: 1.2 },
-      { x: -25, z: 25, sx: 1.2, sy: 2.2, sz: 8 },
-      { x: 25, z: 25, sx: 1.2, sy: 2.2, sz: 8 },
-      { x: -40, z: -50, sx: 10, sy: 2.2, sz: 1.2 },
-      { x: 40, z: -50, sx: 10, sy: 2.2, sz: 1.2 }
-    ];
-
-    streetBarriers.forEach(b => {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(b.sx, b.sy, b.sz), sidewalkMat);
-      mesh.position.set(b.x, b.y, b.z);
+    containers.forEach(c => {
+      const mat = new THREE.MeshStandardMaterial({ map: c.tex, roughness: 0.4, metalness: 0.6 });
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(6, 5, 14), mat);
+      mesh.position.set(c.x, c.y, c.z);
+      mesh.rotation.y = c.rot;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       this.scene.add(mesh);
       this.colliders.push(mesh);
     });
 
-    // --- 7. JUMP PADS (Launch to Skybridges & Rooftops) ---
+    // --- 6. CENTRAL PLAZA HOLOGRAM MONUMENT ---
+    const monBase = new THREE.Mesh(new THREE.BoxGeometry(14, 2.5, 14), metalFrameMat);
+    monBase.position.set(0, 1.25, 35);
+    monBase.castShadow = true;
+    monBase.receiveShadow = true;
+    this.scene.add(monBase);
+    this.colliders.push(monBase);
+
+    const monPillar = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 10, 16), neonCyanMat);
+    monPillar.position.set(0, 7.5, 35);
+    this.scene.add(monPillar);
+
+    const monLight = new THREE.PointLight(0x00f0ff, 3, 25);
+    monLight.position.set(0, 7.5, 35);
+    this.scene.add(monLight);
+
+    // --- 7. STREETLAMPS WITH SPOTLIGHT CONES ---
+    const streetLampPositions = [
+      { x: -25, z: -25 }, { x: 25, z: -25 },
+      { x: -25, z: 25 },  { x: 25, z: 25 },
+      { x: -65, z: -65 }, { x: 65, z: -65 },
+      { x: -65, z: 65 },  { x: 65, z: 65 }
+    ];
+
+    streetLampPositions.forEach(lp => {
+      // Pole
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 10, 12), metalFrameMat);
+      pole.position.set(lp.x, 5, lp.z);
+      pole.castShadow = true;
+      this.scene.add(pole);
+      this.colliders.push(pole);
+
+      // Lamp Bulb Light
+      const lampLight = new THREE.SpotLight(0xffedd5, 4, 30, Math.PI / 3, 0.5);
+      lampLight.position.set(lp.x, 9.8, lp.z);
+      lampLight.target.position.set(lp.x, 0, lp.z);
+      this.scene.add(lampLight);
+      this.scene.add(lampLight.target);
+    });
+
+    // --- 8. JUMP PADS (Launch to Skybridge) ---
     const padPositions = [
       { x: -35, z: -25 },
       { x: 35, z: -25 },
