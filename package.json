@@ -1,0 +1,22 @@
+{
+  "name": "openera",
+  "version": "1.0.0",
+  "description": "High performance 3D browser FPS game inspired by deadshot.io",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.5",
+    "three": "^0.165.0"
+  },
+  "devDependencies": {
+    "vite": "^5.2.11"
+  }
+}

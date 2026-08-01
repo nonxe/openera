@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OPENERA - 3D Browser FPS Multiplayer</title>
+  <link rel="stylesheet" href="/src/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app">
+    <!-- WebGL Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Sniper Scope Overlay -->
+    <div id="scope-overlay" class="hidden">
+      <div class="scope-crosshair"></div>
+    </div>
+
+    <!-- Dynamic In-Game Crosshair -->
+    <div id="crosshair">
+      <div class="ch-line top"></div>
+      <div class="ch-line bottom"></div>
+      <div class="ch-line left"></div>
+      <div class="ch-line right"></div>
+      <div id="hitmarker" class="hidden"></div>
+    </div>
+
+    <!-- HUD Overlay -->
+    <div id="hud" class="hidden">
+      <!-- Top Left Stats & Local IP Info -->
+      <div class="hud-top-left">
+        <div class="player-card">
+          <div class="player-name" id="hud-username">OPERATIVE</div>
+          <div class="player-kd">KILLS: <span id="hud-kills">0</span> | DEATHS: <span id="hud-deaths">0</span></div>
+        </div>
+        <div class="net-badge">
+          <span class="status-dot"></span>
+          <span id="hud-ip-display">LAN: ONLINE</span>
+        </div>
+      </div>
+
+      <!-- Top Right Kill Feed -->
+      <div id="killfeed"></div>
+
+      <!-- Radar Mini-map -->
+      <div class="radar-container">
+        <canvas id="radar-canvas" width="130" height="130"></canvas>
+      </div>
+
+      <!-- Bottom Left Health Bar -->
+      <div class="hud-bottom-left">
+        <div class="stat-label">HEALTH</div>
+        <div class="health-bar-container">
+          <div id="health-bar-fill" style="width: 100%;"></div>
+          <div id="health-value">100</div>
+        </div>
+      </div>
+
+      <!-- Bottom Right Ammo & Weapon -->
+      <div class="hud-bottom-right">
+        <div class="weapon-name" id="hud-weapon-name">ASSAULT RIFLE</div>
+        <div class="ammo-display">
+          <span id="hud-ammo-current">30</span>
+          <span class="ammo-slash">/</span>
+          <span id="hud-ammo-max">30</span>
+        </div>
+        <div class="weapon-slots">
+          <div class="w-slot active" id="slot-1">1: AR</div>
+          <div class="w-slot" id="slot-2">2: SNIPER</div>
+          <div class="w-slot" id="slot-3">3: PISTOL</div>
+        </div>
+      </div>
+
+      <!-- Leaderboard Overlay (Tab Key) -->
+      <div id="leaderboard" class="hidden">
+        <h2>MATCH LEADERBOARD</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>PLAYER</th>
+              <th>KILLS</th>
+              <th>DEATHS</th>
+              <th>HEALTH</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboard-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Main Lobby & Start Menu -->
+    <div id="lobby-screen">
+      <div class="lobby-card">
+        <div class="logo">
+          <h1>OPEN<span class="highlight">ERA</span></h1>
+          <p class="subtitle">TACTICAL 3D MULTIPLAYER FPS</p>
+        </div>
+
+        <div class="input-group">
+          <label for="username-input">CALLSIGN / USERNAME</label>
+          <input type="text" id="username-input" placeholder="Enter your callsign..." maxlength="16" value="Agent_Nova">
+        </div>
+
+        <div class="input-group">
+          <label>SELECT LOADOUT WEAPON</label>
+          <div class="loadout-selector">
+            <button class="loadout-btn active" data-weapon="assault">Assault Rifle</button>
+            <button class="loadout-btn" data-weapon="sniper">Sniper Rifle</button>
+            <button class="loadout-btn" data-weapon="pistol">Tactical Pistol</button>
+          </div>
+        </div>
+
+        <div class="server-box">
+          <div class="server-title">LOCAL HOST & NETWORK CONNECTIVITY</div>
+          <p>Host server runs on <code>0.0.0.0:3000</code>. Share your local IP address with friends on the same Wi-Fi network to play online together!</p>
+        </div>
+
+        <button id="btn-deploy" class="btn-primary">DEPLOY TO ARENA</button>
+
+        <div class="controls-guide">
+          <span><b>WASD</b> Move</span> • 
+          <span><b>MOUSE</b> Aim</span> • 
+          <span><b>CLICK</b> Shoot</span> • 
+          <span><b>RIGHT CLICK</b> Scope/ADS</span> • 
+          <span><b>SHIFT</b> Sprint</span> • 
+          <span><b>C</b> Crouch / Slide</span> • 
+          <span><b>SPACE</b> Jump</span> • 
+          <span><b>1-3</b> Switch Weapon</span> • 
+          <span><b>R</b> Reload</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
