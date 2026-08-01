@@ -130,7 +130,7 @@ class GameApp {
 
     this.socket.on('respawn', (data) => {
       this.health = 100;
-      this.player.position.set(data.x, data.y, data.z);
+      this.player.teleport(data.x, data.y, data.z);
       this.updateHealthUI();
     });
 
@@ -193,6 +193,7 @@ class GameApp {
 
       soundEngine.init();
       this.weapons.equip(this.selectedWeapon);
+      this.player.teleport(0, 0, 0);
       this.canvas.requestPointerLock();
       this.isPlaying = true;
 
@@ -557,7 +558,7 @@ class GameApp {
             // Respawn player after 3s
             setTimeout(() => {
               this.health = 100;
-              this.player.position.set(0, 3, 0);
+              this.player.teleport(0, 0, 0);
               this.updateHealthUI();
             }, 3000);
           }

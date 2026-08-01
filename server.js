@@ -44,14 +44,14 @@ function getLocalIPs() {
 
 // Spawning points around the map
 const SPAWN_POINTS = [
-  { x: 0, y: 3, z: -35 },
-  { x: 35, y: 3, z: 0 },
-  { x: -35, y: 3, z: 0 },
-  { x: 0, y: 3, z: 35 },
-  { x: 20, y: 3, z: 20 },
-  { x: -20, y: 3, z: -20 },
-  { x: 25, y: 8, z: -25 }, // High platform
-  { x: -25, y: 8, z: 25 }  // High platform
+  { x: 0, y: 0, z: -35 },
+  { x: 35, y: 0, z: 0 },
+  { x: -35, y: 0, z: 0 },
+  { x: 0, y: 0, z: 35 },
+  { x: 20, y: 0, z: 20 },
+  { x: -20, y: 0, z: -20 },
+  { x: 55, y: 8, z: -55 }, // Corner Sniper Tower
+  { x: -55, y: 8, z: 55 }  // Corner Sniper Tower
 ];
 
 function getRandomSpawn() {

@@ -12,203 +12,291 @@ export class GameScene {
   }
 
   initLightingAndEnvironment() {
-    // Sky & Atmosphere Fog
-    this.scene.background = new THREE.Color(0x0a0c16);
-    this.scene.fog = new THREE.FogExp2(0x0a0c16, 0.015);
+    // Realistic Atmospheric Sky & Fog
+    this.scene.background = new THREE.Color(0x0f172a);
+    this.scene.fog = new THREE.FogExp2(0x0f172a, 0.008);
 
-    // Ambient Hemisphere Light
-    const hemiLight = new THREE.HemisphereLight(0x38bdf8, 0x0f172a, 0.6);
+    // Ambient Light
+    const ambientLight = new THREE.AmbientLight(0x94a3b8, 0.7);
+    this.scene.add(ambientLight);
+
+    // Directional Sunlight with Shadows
+    const sunLight = new THREE.DirectionalLight(0xfff7ed, 1.4);
+    sunLight.position.set(50, 80, 40);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 1;
+    sunLight.shadow.camera.far = 200;
+    const d = 70;
+    sunLight.shadow.camera.left = -d;
+    sunLight.shadow.camera.right = d;
+    sunLight.shadow.camera.top = d;
+    sunLight.shadow.camera.bottom = -d;
+    sunLight.shadow.bias = -0.0003;
+    this.scene.add(sunLight);
+
+    // Hemisphere Light for Natural Sky Up/Ground Down bounce
+    const hemiLight = new THREE.HemisphereLight(0x38bdf8, 0x1e293b, 0.5);
     this.scene.add(hemiLight);
-
-    // Sun / Directional Light with Shadows
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    dirLight.position.set(40, 60, 30);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
-    dirLight.shadow.camera.near = 0.5;
-    dirLight.shadow.camera.far = 150;
-    const d = 50;
-    dirLight.shadow.camera.left = -d;
-    dirLight.shadow.camera.right = d;
-    dirLight.shadow.camera.top = d;
-    dirLight.shadow.camera.bottom = -d;
-    dirLight.shadow.bias = -0.0005;
-    this.scene.add(dirLight);
-
-    // Accent Cyber Neon Point Lights
-    const cyanLight = new THREE.PointLight(0x00f0ff, 2, 25);
-    cyanLight.position.set(0, 10, 0);
-    this.scene.add(cyanLight);
-
-    const magentaLight = new THREE.PointLight(0xff007f, 2, 25);
-    magentaLight.position.set(0, 8, 20);
-    this.scene.add(magentaLight);
   }
 
   buildMap() {
-    // Materials
-    const floorMat = new THREE.MeshStandardMaterial({
+    // --- MATERIALS ---
+    const asphaltMat = new THREE.MeshStandardMaterial({
       color: 0x1e293b,
-      roughness: 0.4,
-      metalness: 0.6
+      roughness: 0.8,
+      metalness: 0.2
     });
 
-    const wallMat = new THREE.MeshStandardMaterial({
+    const concreteMat = new THREE.MeshStandardMaterial({
+      color: 0x475569,
+      roughness: 0.7,
+      metalness: 0.1
+    });
+
+    const buildingMat = new THREE.MeshStandardMaterial({
       color: 0x334155,
       roughness: 0.5,
       metalness: 0.3
     });
 
-    const obstacleMat = new THREE.MeshStandardMaterial({
-      color: 0x475569,
+    const metalFrameMat = new THREE.MeshStandardMaterial({
+      color: 0x0f172a,
       roughness: 0.3,
-      metalness: 0.7
+      metalness: 0.8
     });
 
-    const neonCyanMat = new THREE.MeshBasicMaterial({
-      color: 0x00f0ff
-    });
+    const containerRedMat = new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.4, metalness: 0.5 });
+    const containerBlueMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.4, metalness: 0.5 });
+    const containerYellowMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.4, metalness: 0.5 });
+    const containerGreenMat = new THREE.MeshStandardMaterial({ color: 0x047857, roughness: 0.4, metalness: 0.5 });
 
-    const neonPinkMat = new THREE.MeshBasicMaterial({
-      color: 0xff007f
-    });
+    const neonCyanMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+    const neonPinkMat = new THREE.MeshBasicMaterial({ color: 0xff007f });
 
     const jumpPadMat = new THREE.MeshStandardMaterial({
       color: 0x10b981,
       emissive: 0x059669,
-      emissiveIntensity: 0.6,
+      emissiveIntensity: 0.8,
       roughness: 0.2
     });
 
-    // Main Ground (100x100)
-    const groundGeo = new THREE.BoxGeometry(120, 2, 120);
-    const ground = new THREE.Mesh(groundGeo, floorMat);
+    // --- 1. MAIN GROUND ARENA (150x150) ---
+    const groundGeo = new THREE.BoxGeometry(160, 2, 160);
+    const ground = new THREE.Mesh(groundGeo, asphaltMat);
     ground.position.set(0, -1, 0);
     ground.receiveShadow = true;
     this.scene.add(ground);
     this.colliders.push(ground);
 
-    // Floor Grid Overlay Lines
-    const grid = new THREE.GridHelper(120, 40, 0x00f0ff, 0x1e293b);
+    // Ground Grid Lines & Road Markings
+    const grid = new THREE.GridHelper(160, 40, 0x00f0ff, 0x334155);
     grid.position.y = 0.01;
     this.scene.add(grid);
 
-    // Outer Arena Boundary Walls
-    const wallHeight = 15;
-    const arenaSize = 120;
-    const wallGeoHoriz = new THREE.BoxGeometry(arenaSize, wallHeight, 2);
-    const wallGeoVert = new THREE.BoxGeometry(2, wallHeight, arenaSize);
+    // --- 2. PERIMETER BOUNDARY WALLS (High concrete barriers) ---
+    const wallHeight = 16;
+    const arenaSize = 160;
+    const wallHorizGeo = new THREE.BoxGeometry(arenaSize, wallHeight, 3);
+    const wallVertGeo = new THREE.BoxGeometry(3, wallHeight, arenaSize);
 
-    const wallNorth = new THREE.Mesh(wallGeoHoriz, wallMat);
+    const wallNorth = new THREE.Mesh(wallHorizGeo, concreteMat);
     wallNorth.position.set(0, wallHeight / 2, -arenaSize / 2);
     wallNorth.castShadow = true;
     wallNorth.receiveShadow = true;
     this.scene.add(wallNorth);
     this.colliders.push(wallNorth);
 
-    const wallSouth = new THREE.Mesh(wallGeoHoriz, wallMat);
+    const wallSouth = new THREE.Mesh(wallHorizGeo, concreteMat);
     wallSouth.position.set(0, wallHeight / 2, arenaSize / 2);
     wallSouth.castShadow = true;
     wallSouth.receiveShadow = true;
     this.scene.add(wallSouth);
     this.colliders.push(wallSouth);
 
-    const wallEast = new THREE.Mesh(wallGeoVert, wallMat);
+    const wallEast = new THREE.Mesh(wallVertGeo, concreteMat);
     wallEast.position.set(arenaSize / 2, wallHeight / 2, 0);
     wallEast.castShadow = true;
     wallEast.receiveShadow = true;
     this.scene.add(wallEast);
     this.colliders.push(wallEast);
 
-    const wallWest = new THREE.Mesh(wallGeoVert, wallMat);
+    const wallWest = new THREE.Mesh(wallVertGeo, concreteMat);
     wallWest.position.set(-arenaSize / 2, wallHeight / 2, 0);
     wallWest.castShadow = true;
     wallWest.receiveShadow = true;
     this.scene.add(wallWest);
     this.colliders.push(wallWest);
 
-    // Neon Wall Trims
-    const trimGeoNorth = new THREE.BoxGeometry(arenaSize, 0.4, 0.4);
-    const trimNorth = new THREE.Mesh(trimGeoNorth, neonCyanMat);
-    trimNorth.position.set(0, wallHeight - 1, -arenaSize / 2 + 1);
-    this.scene.add(trimNorth);
+    // Neon Boundary Trim Lines
+    const trimN = new THREE.Mesh(new THREE.BoxGeometry(arenaSize, 0.4, 0.4), neonCyanMat);
+    trimN.position.set(0, wallHeight - 1, -arenaSize / 2 + 1.6);
+    this.scene.add(trimN);
 
-    const trimSouth = new THREE.Mesh(trimGeoNorth, neonCyanMat);
-    trimSouth.position.set(0, wallHeight - 1, arenaSize / 2 - 1);
-    this.scene.add(trimSouth);
+    const trimS = new THREE.Mesh(new THREE.BoxGeometry(arenaSize, 0.4, 0.4), neonCyanMat);
+    trimS.position.set(0, wallHeight - 1, arenaSize / 2 - 1.6);
+    this.scene.add(trimS);
 
-    // Central Platform Complex
-    const centerPlatformGeo = new THREE.BoxGeometry(24, 4, 24);
-    const centerPlatform = new THREE.Mesh(centerPlatformGeo, obstacleMat);
-    centerPlatform.position.set(0, 2, 0);
-    centerPlatform.castShadow = true;
-    centerPlatform.receiveShadow = true;
-    this.scene.add(centerPlatform);
-    this.colliders.push(centerPlatform);
+    // --- 3. CENTRAL 2-STORY BUILDING & BALCONY ---
+    // Building Main Structure (30x12x20)
+    const bldWallMat = buildingMat;
 
-    // Central Elevated Tower
-    const towerGeo = new THREE.BoxGeometry(10, 8, 10);
-    const tower = new THREE.Mesh(towerGeo, obstacleMat);
-    tower.position.set(0, 8, 0);
-    tower.castShadow = true;
-    tower.receiveShadow = true;
-    this.scene.add(tower);
-    this.colliders.push(tower);
+    // Ground Floor Back Wall
+    const bldBack = new THREE.Mesh(new THREE.BoxGeometry(32, 10, 1), bldWallMat);
+    bldBack.position.set(0, 5, -10);
+    bldBack.castShadow = true;
+    bldBack.receiveShadow = true;
+    this.scene.add(bldBack);
+    this.colliders.push(bldBack);
 
-    // Tower Neon Strip
-    const towerTrimGeo = new THREE.BoxGeometry(10.2, 0.3, 10.2);
-    const towerTrim = new THREE.Mesh(towerTrimGeo, neonPinkMat);
-    towerTrim.position.set(0, 11.5, 0);
-    this.scene.add(towerTrim);
+    // Building Left Wall
+    const bldLeft = new THREE.Mesh(new THREE.BoxGeometry(1, 10, 20), bldWallMat);
+    bldLeft.position.set(-16, 5, 0);
+    bldLeft.castShadow = true;
+    bldLeft.receiveShadow = true;
+    this.scene.add(bldLeft);
+    this.colliders.push(bldLeft);
 
-    // Ramps leading up to central platform
-    this.createRamp(0, 2, -18, 8, 4, 12, 0);
-    this.createRamp(0, 2, 18, 8, 4, 12, Math.PI);
+    // Building Right Wall
+    const bldRight = new THREE.Mesh(new THREE.BoxGeometry(1, 10, 20), bldWallMat);
+    bldRight.position.set(16, 5, 0);
+    bldRight.castShadow = true;
+    bldRight.receiveShadow = true;
+    this.scene.add(bldRight);
+    this.colliders.push(bldRight);
 
-    // Cover Crates & Barrier Blocks
-    const cratePositions = [
-      { x: -18, y: 1.5, z: -15, sx: 4, sy: 3, sz: 4 },
-      { x: 18, y: 1.5, z: -15, sx: 4, sy: 3, sz: 4 },
-      { x: -18, y: 1.5, z: 15, sx: 4, sy: 3, sz: 4 },
-      { x: 18, y: 1.5, z: 15, sx: 4, sy: 3, sz: 4 },
-      { x: -35, y: 2, z: 0, sx: 6, sy: 4, sz: 12 },
-      { x: 35, y: 2, z: 0, sx: 6, sy: 4, sz: 12 },
-      { x: 0, y: 2, z: -35, sx: 12, sy: 4, sz: 6 },
-      { x: 0, y: 2, z: 35, sx: 12, sy: 4, sz: 6 },
-      { x: -25, y: 3, z: -30, sx: 8, sy: 6, sz: 8 },
-      { x: 25, y: 3, z: 30, sx: 8, sy: 6, sz: 8 }
+    // Second Floor Balcony Floor Platform (Height = 5m)
+    const balconyFloor = new THREE.Mesh(new THREE.BoxGeometry(32, 0.8, 12), metalFrameMat);
+    balconyFloor.position.set(0, 5, -4);
+    balconyFloor.castShadow = true;
+    balconyFloor.receiveShadow = true;
+    this.scene.add(balconyFloor);
+    this.colliders.push(balconyFloor);
+
+    // Balcony Front Railing
+    const railingGeo = new THREE.BoxGeometry(32, 1.2, 0.3);
+    const railing = new THREE.Mesh(railingGeo, metalFrameMat);
+    railing.position.set(0, 6, 2);
+    railing.castShadow = true;
+    this.scene.add(railing);
+    this.colliders.push(railing);
+
+    // Stairs / Ramps up to Balcony (Left & Right)
+    this.createRamp(-12, 2.5, 4, 4, 5, 10, 0);
+    this.createRamp(12, 2.5, 4, 4, 5, 10, 0);
+
+    // --- 4. TACTICAL SHIPPING CONTAINERS (Red, Blue, Yellow, Green) ---
+    const containers = [
+      { x: -35, y: 2.5, z: -25, rot: 0, mat: containerRedMat },
+      { x: -35, y: 7.5, z: -25, rot: 0.1, mat: containerRedMat }, // Stacked!
+      { x: 35, y: 2.5, z: -25, rot: 0.4, mat: containerBlueMat },
+      { x: 35, y: 7.5, z: -25, rot: 0.4, mat: containerBlueMat }, // Stacked!
+      { x: -45, y: 2.5, z: 20, rot: -0.5, mat: containerYellowMat },
+      { x: 45, y: 2.5, z: 20, rot: 0.3, mat: containerGreenMat },
+      { x: 0, y: 2.5, z: 40, rot: Math.PI / 2, mat: containerRedMat },
+      { x: -20, y: 2.5, z: 35, rot: 0, mat: containerBlueMat },
+      { x: 20, y: 2.5, z: 35, rot: -0.2, mat: containerYellowMat }
     ];
 
-    cratePositions.forEach(pos => {
-      const geo = new THREE.BoxGeometry(pos.sx, pos.sy, pos.sz);
-      const mesh = new THREE.Mesh(geo, obstacleMat);
-      mesh.position.set(pos.x, pos.y, pos.z);
+    containers.forEach(c => {
+      const geo = new THREE.BoxGeometry(6, 5, 14);
+      const mesh = new THREE.Mesh(geo, c.mat);
+      mesh.position.set(c.x, c.y, c.z);
+      mesh.rotation.y = c.rot;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      this.scene.add(mesh);
+      this.colliders.push(mesh);
+
+      // Neon edge stripes on containers
+      const stripeGeo = new THREE.BoxGeometry(6.1, 0.2, 0.2);
+      const stripe = new THREE.Mesh(stripeGeo, neonCyanMat);
+      stripe.position.set(c.x, c.y + 2.5, c.z);
+      stripe.rotation.y = c.rot;
+      this.scene.add(stripe);
+    });
+
+    // --- 5. HIGH SNIPER LOOKOUT TOWERS (Corners) ---
+    const towerPositions = [
+      { x: -55, z: -55 },
+      { x: 55, z: -55 },
+      { x: -55, z: 55 },
+      { x: 55, z: 55 }
+    ];
+
+    towerPositions.forEach(tp => {
+      // Tower Platform (Height = 8m)
+      const platGeo = new THREE.BoxGeometry(10, 0.8, 10);
+      const plat = new THREE.Mesh(platGeo, concreteMat);
+      plat.position.set(tp.x, 8, tp.z);
+      plat.castShadow = true;
+      plat.receiveShadow = true;
+      this.scene.add(plat);
+      this.colliders.push(plat);
+
+      // Tower Support Pillars
+      const pillarGeo = new THREE.BoxGeometry(1, 8, 1);
+      const offsets = [-4, 4];
+      offsets.forEach(ox => {
+        offsets.forEach(oz => {
+          const pillar = new THREE.Mesh(pillarGeo, metalFrameMat);
+          pillar.position.set(tp.x + ox, 4, tp.z + oz);
+          pillar.castShadow = true;
+          this.scene.add(pillar);
+          this.colliders.push(pillar);
+        });
+      });
+
+      // Tower Ramp
+      this.createRamp(tp.x, 4, tp.z + (tp.z < 0 ? 9 : -9), 3, 8, 12, tp.z < 0 ? 0 : Math.PI);
+    });
+
+    // --- 6. CONCRETE BARRIERS & COVER BLOCKS ---
+    const barriers = [
+      { x: -10, y: 1.2, z: -25, sx: 6, sy: 2.4, sz: 1 },
+      { x: 10, y: 1.2, z: -25, sx: 6, sy: 2.4, sz: 1 },
+      { x: -15, y: 1.2, z: -45, sx: 8, sy: 2.4, sz: 1 },
+      { x: 15, y: 1.2, z: -45, sx: 8, sy: 2.4, sz: 1 },
+      { x: 0, y: 1.2, z: 15, sx: 10, sy: 2.4, sz: 1.5 },
+      { x: -25, y: 1.2, z: 0, sx: 1.5, sy: 2.4, sz: 10 },
+      { x: 25, y: 1.2, z: 0, sx: 1.5, sy: 2.4, sz: 10 }
+    ];
+
+    barriers.forEach(b => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(b.sx, b.sy, b.sz), concreteMat);
+      mesh.position.set(b.x, b.y, b.z);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       this.scene.add(mesh);
       this.colliders.push(mesh);
     });
 
-    // Jump Pads (Launch player high into the air)
+    // --- 7. JUMP PADS (Green Energy Boost Pads) ---
     const padPositions = [
-      { x: -22, z: 0 },
-      { x: 22, z: 0 },
-      { x: 0, z: -25 },
-      { x: 0, z: 25 }
+      { x: -25, z: -15 },
+      { x: 25, z: -15 },
+      { x: 0, z: 25 },
+      { x: -40, z: 40 },
+      { x: 40, z: 40 }
     ];
 
     padPositions.forEach(p => {
-      const padGeo = new THREE.CylinderGeometry(2, 2.5, 0.4, 16);
+      const padGeo = new THREE.CylinderGeometry(2.2, 2.8, 0.4, 16);
       const padMesh = new THREE.Mesh(padGeo, jumpPadMat);
       padMesh.position.set(p.x, 0.2, p.z);
       this.scene.add(padMesh);
       this.jumpPads.push(padMesh);
+
+      // Light glow above jump pad
+      const light = new THREE.PointLight(0x10b981, 1.5, 12);
+      light.position.set(p.x, 1.5, p.z);
+      this.scene.add(light);
     });
   }
 
   createRamp(x, y, z, width, height, length, rotationY) {
-    const rampMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.4 });
+    const rampMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.6, metalness: 0.4 });
     const rampGeo = new THREE.BoxGeometry(width, height, length);
     const ramp = new THREE.Mesh(rampGeo, rampMat);
     ramp.position.set(x, y, z);
