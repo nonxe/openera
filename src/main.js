@@ -553,6 +553,7 @@ class GameApp {
       this.player.update(delta);
       this.weapons.update(delta);
       this.particles.update(delta);
+      this.gameScene.update(delta);
 
       if (this.socket && this.socket.connected) {
         this.socket.emit('player_update', {

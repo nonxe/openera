@@ -49,7 +49,7 @@ export class WeaponManager {
       metalness: 0.95
     });
 
-    const neonCyanMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+    const neonCyanMat = new THREE.MeshStandardMaterial({ color: 0x00f0ff, emissive: 0x00f0ff, emissiveIntensity: 0.8, roughness: 0.1, metalness: 0.5 });
     const darkSteelMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.4, metalness: 0.9 });
 
     // --- 1. HIGH DETAIL AK-47 ASSAULT RIFLE ---
@@ -170,7 +170,7 @@ export class WeaponManager {
       name: 'Heavy Sniper',
       mesh: sniperGroup,
       hipPos: new THREE.Vector3(0.26, -0.24, -0.5),
-      adsPos: new THREE.Vector3(0, -0.15, -0.25),
+      adsPos: new THREE.Vector3(0, -0.18, -0.55),
       damage: 85,
       headshotMult: 2.5,
       fireRate: 850,
@@ -258,6 +258,12 @@ export class WeaponManager {
   update(delta) {
     const w = this.weapons[this.currentWeaponKey];
     if (!w) return;
+
+    if (this.isADS && this.currentWeaponKey === 'sniper') {
+      w.mesh.visible = false;
+    } else {
+      w.mesh.visible = true;
+    }
 
     // Smooth Recoil Recovery
     this.recoil.x = THREE.MathUtils.lerp(this.recoil.x, this.targetRecoil.x, delta * 15);
