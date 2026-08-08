@@ -5,6 +5,7 @@ import { WeaponManager } from './engine/Weapons.js';
 import { PlayerController } from './engine/PlayerController.js';
 import { ParticleFX } from './engine/Particles.js';
 import { soundEngine } from './engine/Audio.js';
+import { RacingMode } from './engine/RacingMode.js';
 
 class GameApp {
   constructor() {
@@ -15,14 +16,21 @@ class GameApp {
     // Player Stats & State
     this.username = 'Viper_X';
     this.selectedWeapon = 'assault';
-    this.gameMode = 'FFA'; // 'FFA' or 'TDM'
+    this.selectedCarColor = '#00f0ff';
+    this.gameMode = 'FFA'; // 'FFA', 'TDM', or 'RACE'
     this.team = 'none';
     this.health = 100;
     this.kills = 0;
     this.deaths = 0;
     this.isPlaying = false;
+    this.isRacing = false;
     this.lastShotTime = 0;
     this.isShopOpen = false;
+    this.racingMode = null;
+    this.raceKeys = {
+      forward: false, backward: false, left: false, right: false,
+      drift: false, nitro: false
+    };
 
     // Remote Players Map (Pure Online Humans)
     this.remotePlayers = new Map();
@@ -32,6 +40,7 @@ class GameApp {
     this.initSocket();
     this.initUI();
     this.initEvents();
+    this.initRaceSocketEvents();
 
     this.clock = new THREE.Clock();
     this.animate();
@@ -205,6 +214,25 @@ class GameApp {
         document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.gameMode = btn.dataset.mode;
+        // Toggle weapon/car selection visibility
+        const weaponGroup = document.getElementById('weapon-selector-group');
+        const carGroup = document.getElementById('car-color-group');
+        if (this.gameMode === 'RACE') {
+          weaponGroup.classList.add('hidden');
+          carGroup.classList.remove('hidden');
+        } else {
+          weaponGroup.classList.remove('hidden');
+          carGroup.classList.add('hidden');
+        }
+      });
+    });
+
+    // Car color selector
+    document.querySelectorAll('.car-color-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.car-color-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.selectedCarColor = btn.dataset.color;
       });
     });
 
@@ -238,20 +266,64 @@ class GameApp {
 
       document.getElementById('hud-username').textContent = this.username.toUpperCase();
       document.getElementById('lobby-screen').classList.add('hidden');
-      document.getElementById('hud').classList.remove('hidden');
 
       soundEngine.init();
-      this.weapons.equip(this.selectedWeapon);
-      this.player.teleport(0, 0, 0);
-      this.canvas.requestPointerLock();
-      this.isPlaying = true;
 
-      this.socket.emit('join_game', {
-        username: this.username,
-        weapon: this.selectedWeapon,
-        mode: this.gameMode
-      });
+      if (this.gameMode === 'RACE') {
+        // --- RACING MODE ---
+        this.isRacing = true;
+        this.isPlaying = true;
+        document.getElementById('hud').classList.add('hidden');
+        document.getElementById('race-hud').classList.remove('hidden');
+
+        this.racingMode = new RacingMode(this.gameScene.scene, this.camera, this.socket);
+        this.racingMode.startRace();
+
+        // Hide FPS weapon
+        this.weapons.weaponGroup.visible = false;
+
+        this.socket.emit('join_race', {
+          username: this.username,
+          color: this.selectedCarColor
+        });
+
+        // Init racing key listeners
+        this.initRaceKeyListeners();
+      } else {
+        // --- FPS MODE ---
+        this.isRacing = false;
+        document.getElementById('hud').classList.remove('hidden');
+        document.getElementById('race-hud').classList.add('hidden');
+
+        this.weapons.weaponGroup.visible = true;
+        this.weapons.equip(this.selectedWeapon);
+        this.player.teleport(0, 0, 0);
+        this.canvas.requestPointerLock();
+        this.isPlaying = true;
+
+        this.socket.emit('join_game', {
+          username: this.username,
+          weapon: this.selectedWeapon,
+          mode: this.gameMode
+        });
+      }
     });
+
+    // Race back to lobby button
+    const raceBackBtn = document.getElementById('btn-race-back');
+    if (raceBackBtn) {
+      raceBackBtn.addEventListener('click', () => {
+        document.getElementById('race-finish-screen').classList.add('hidden');
+        document.getElementById('race-hud').classList.add('hidden');
+        document.getElementById('lobby-screen').classList.remove('hidden');
+        if (this.racingMode) {
+          this.racingMode.dispose();
+          this.racingMode = null;
+        }
+        this.isRacing = false;
+        this.isPlaying = false;
+      });
+    }
   }
 
   initEvents() {
@@ -544,12 +616,121 @@ class GameApp {
     });
   }
 
+  // --- RACING KEY LISTENERS ---
+  initRaceKeyListeners() {
+    this._raceKeyDown = (e) => {
+      if (!this.isRacing) return;
+      switch(e.code) {
+        case 'KeyW': this.raceKeys.forward = true; break;
+        case 'KeyS': this.raceKeys.backward = true; break;
+        case 'KeyA': this.raceKeys.left = true; break;
+        case 'KeyD': this.raceKeys.right = true; break;
+        case 'Space': this.raceKeys.drift = true; break;
+        case 'ShiftLeft': this.raceKeys.nitro = true; break;
+      }
+    };
+    this._raceKeyUp = (e) => {
+      if (!this.isRacing) return;
+      switch(e.code) {
+        case 'KeyW': this.raceKeys.forward = false; break;
+        case 'KeyS': this.raceKeys.backward = false; break;
+        case 'KeyA': this.raceKeys.left = false; break;
+        case 'KeyD': this.raceKeys.right = false; break;
+        case 'Space': this.raceKeys.drift = false; break;
+        case 'ShiftLeft': this.raceKeys.nitro = false; break;
+      }
+    };
+    window.addEventListener('keydown', this._raceKeyDown);
+    window.addEventListener('keyup', this._raceKeyUp);
+  }
+
+  // --- RACING SOCKET EVENTS ---
+  initRaceSocketEvents() {
+    this.socket.on('racer_joined', (data) => {
+      if (this.racingMode && data.id !== this.socket.id) {
+        this.racingMode.spawnRemoteRacer(data.id, data.color || '#ff007f');
+      }
+    });
+
+    this.socket.on('racer_moved', (data) => {
+      if (this.racingMode && data.id !== this.socket.id) {
+        this.racingMode.updateRemoteRacer(data.id, data);
+      }
+    });
+
+    this.socket.on('racer_left', (data) => {
+      if (this.racingMode) {
+        this.racingMode.removeRemoteRacer(data.id);
+      }
+    });
+
+    this.socket.on('race_countdown', (data) => {
+      const countdownEl = document.getElementById('race-countdown');
+      const textEl = document.getElementById('countdown-text');
+      if (data.value > 0) {
+        countdownEl.classList.remove('hidden');
+        textEl.textContent = data.value;
+      } else {
+        textEl.textContent = 'GO!';
+        setTimeout(() => countdownEl.classList.add('hidden'), 800);
+        if (this.racingMode) {
+          this.racingMode.raceActive = true;
+          this.racingMode.raceTime = 0;
+        }
+      }
+    });
+
+    this.socket.on('race_result', (data) => {
+      document.getElementById('race-finish-screen').classList.remove('hidden');
+      document.getElementById('race-final-time').textContent = data.time || '0:00.0';
+      const rankEl = document.getElementById('race-ranking');
+      if (data.rankings) {
+        rankEl.innerHTML = data.rankings.map((r, i) =>
+          `<div style="margin:4px 0;color:${i===0?'#10b981':'#94a3b8'}">${i+1}. ${r.username} - ${r.time}</div>`
+        ).join('');
+      }
+    });
+  }
+
+  // --- RACE HUD UPDATE ---
+  updateRaceHUD() {
+    if (!this.racingMode) return;
+    const state = this.racingMode.getState();
+    document.getElementById('race-speed').textContent = Math.round(Math.abs(state.speed) * 3.6);
+    document.getElementById('race-lap').textContent = Math.min(state.lap + 1, 3);
+    document.getElementById('race-checkpoint').textContent = state.checkpoint;
+    document.getElementById('race-total-cp').textContent = this.racingMode.checkpoints.length;
+
+    const totalSec = state.raceTime || 0;
+    const mins = Math.floor(totalSec / 60);
+    const secs = (totalSec % 60).toFixed(1);
+    document.getElementById('race-time').textContent = `${mins}:${secs.padStart(4, '0')}`;
+  }
+
   animate() {
     requestAnimationFrame(() => this.animate());
 
     const delta = Math.min(this.clock.getDelta(), 0.1);
 
-    if (this.isPlaying && !this.isShopOpen) {
+    if (this.isPlaying && this.isRacing && this.racingMode) {
+      // --- RACING ANIMATE ---
+      this.racingMode.update(delta, this.raceKeys);
+      this.gameScene.update(delta);
+      this.updateRaceHUD();
+
+      // Send race position to server
+      if (this.socket && this.socket.connected) {
+        const state = this.racingMode.getState();
+        this.socket.emit('race_update', {
+          x: state.position.x,
+          y: state.position.y,
+          z: state.position.z,
+          rotY: state.rotation,
+          speed: state.speed
+        });
+      }
+    } else if (this.isPlaying && !this.isShopOpen) {
+      // --- FPS ANIMATE ---
       this.player.update(delta);
       this.weapons.update(delta);
       this.particles.update(delta);

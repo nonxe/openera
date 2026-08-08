@@ -19,6 +19,36 @@
       <div class="scope-crosshair"></div>
     </div>
 
+    <!-- Racing Countdown Overlay -->
+    <div id="race-countdown" class="hidden">
+      <div class="countdown-number" id="countdown-text">3</div>
+    </div>
+
+    <!-- Racing HUD -->
+    <div id="race-hud" class="hidden">
+      <div class="race-speed-panel">
+        <div class="speed-value" id="race-speed">0</div>
+        <div class="speed-unit">KM/H</div>
+      </div>
+      <div class="race-info-panel">
+        <div class="race-stat"><span class="race-label">LAP</span> <span id="race-lap">1</span>/3</div>
+        <div class="race-stat"><span class="race-label">CHECKPOINT</span> <span id="race-checkpoint">0</span>/<span id="race-total-cp">12</span></div>
+        <div class="race-stat"><span class="race-label">TIME</span> <span id="race-time">0:00.0</span></div>
+        <div class="race-stat"><span class="race-label">POSITION</span> <span id="race-position">-</span></div>
+      </div>
+      <div class="race-minimap">
+        <canvas id="race-minimap-canvas" width="160" height="160"></canvas>
+      </div>
+      <div id="race-finish-screen" class="hidden">
+        <div class="finish-card">
+          <h2>🏁 RACE FINISHED!</h2>
+          <div id="race-final-time" class="finish-time">0:00.0</div>
+          <div id="race-ranking"></div>
+          <button id="btn-race-back" class="btn-primary">BACK TO LOBBY</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Dynamic In-Game Crosshair -->
     <div id="crosshair">
       <div class="ch-line top"></div>
@@ -145,15 +175,26 @@
           <div class="mode-selector">
             <button class="mode-btn active" data-mode="FFA">FREE FOR ALL (FFA)</button>
             <button class="mode-btn" data-mode="TDM">TEAM DEATHMATCH (TDM)</button>
+            <button class="mode-btn" data-mode="RACE">🏎️ RACING</button>
           </div>
         </div>
 
-        <div class="input-group">
+        <div class="input-group" id="weapon-selector-group">
           <label>SELECT STARTING WEAPON</label>
           <div class="loadout-selector">
             <button class="loadout-btn active" data-weapon="assault">Assault Rifle</button>
             <button class="loadout-btn" data-weapon="sniper">Sniper Rifle</button>
             <button class="loadout-btn" data-weapon="pistol">Tactical Pistol</button>
+          </div>
+        </div>
+
+        <div class="input-group hidden" id="car-color-group">
+          <label>SELECT CAR COLOR</label>
+          <div class="loadout-selector">
+            <button class="loadout-btn car-color-btn active" data-color="#00f0ff" style="border-color:#00f0ff;">Cyan</button>
+            <button class="loadout-btn car-color-btn" data-color="#ff007f" style="border-color:#ff007f;">Pink</button>
+            <button class="loadout-btn car-color-btn" data-color="#f59e0b" style="border-color:#f59e0b;">Gold</button>
+            <button class="loadout-btn car-color-btn" data-color="#10b981" style="border-color:#10b981;">Green</button>
           </div>
         </div>
 
@@ -172,7 +213,8 @@
           <span><b>SHIFT</b> Sprint</span> • 
           <span><b>C</b> Slide</span> • 
           <span><b>B</b> Weapon Shop</span> • 
-          <span><b>1-3</b> Quick Switch</span>
+          <span><b>1-3</b> Quick Switch</span> •
+          <span><b>RACING:</b> WASD Drive, SPACE Drift, SHIFT Nitro</span>
         </div>
       </div>
     </div>

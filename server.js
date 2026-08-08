@@ -23,8 +23,15 @@ app.use(express.static(path.join(__dirname, 'dist')));
 
 // Pure Real Player Game State (NO BOTS)
 const players = new Map();
-let gameMode = 'FFA'; // 'FFA' or 'TDM'
+let gameMode = 'FFA'; // 'FFA', 'TDM', or 'race'
 let teamScores = { alpha: 0, bravo: 0 };
+
+const raceState = {
+  isActive: false,
+  countdown: 0,
+  players: new Map(), // id -> {lap, checkpoint, time, finished}
+  startTime: 0
+};
 
 function getLocalIPs() {
   const interfaces = os.networkInterfaces();
@@ -214,8 +221,69 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('join_race', (data) => {
+    const p = players.get(socket.id);
+    if (p) p.mode = 'race';
+    
+    raceState.players.set(socket.id, { lap: 0, checkpoint: 0, time: 0, finished: false });
+    socket.broadcast.emit('racer_joined', { id: socket.id, ...data });
+  });
+
+  socket.on('race_update', (data) => {
+    socket.broadcast.emit('racer_moved', { id: socket.id, ...data });
+  });
+
+  socket.on('checkpoint_reached', (data) => {
+    const racer = raceState.players.get(socket.id);
+    if (racer) racer.checkpoint = data.checkpoint || data.checkpointIndex || 0;
+    io.emit('racer_checkpoint', { id: socket.id, ...data });
+  });
+
+  socket.on('lap_completed', (data) => {
+    const racer = raceState.players.get(socket.id);
+    if (racer) racer.lap = data.lap || 0;
+    io.emit('racer_lap', { id: socket.id, ...data });
+  });
+
+  socket.on('race_finished', (data) => {
+    const racer = raceState.players.get(socket.id);
+    if (racer) {
+      racer.finished = true;
+      racer.time = data.time || 0;
+    }
+    
+    const rankings = Array.from(raceState.players.entries())
+      .map(([id, state]) => ({ id, ...state }))
+      .sort((a, b) => (a.time || Infinity) - (b.time || Infinity));
+
+    io.emit('race_result', { id: socket.id, rankings, ...data });
+  });
+
+  socket.on('start_race_countdown', () => {
+    let tick = 3;
+    raceState.isActive = true;
+    io.emit('race_countdown', tick);
+    const interval = setInterval(() => {
+      tick--;
+      if (tick > 0) {
+        io.emit('race_countdown', tick);
+      } else {
+        io.emit('race_countdown', 'GO');
+        raceState.startTime = Date.now();
+        clearInterval(interval);
+      }
+    }, 1000);
+  });
+
   socket.on('disconnect', () => {
     console.log(`[-] Player Disconnected: ${socket.id}`);
+    
+    const p = players.get(socket.id);
+    if (p && p.mode === 'race') {
+      io.emit('racer_left', { id: socket.id });
+      raceState.players.delete(socket.id);
+    }
+    
     players.delete(socket.id);
     io.emit('player_left', { id: socket.id });
   });
